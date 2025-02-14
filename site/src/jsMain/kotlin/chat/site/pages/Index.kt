@@ -10,8 +10,8 @@ import com.varabyte.kobweb.core.rememberPageContext
 
 @Page
 @Composable
-fun HomePage() {
-    PageLayout("Kobweb Chat") {
+fun HomePage() =
+    PageLayout("Malefirc") {
         val ctx = rememberPageContext()
         CenteredColumnContent {
             if (LoginState.current is LoginState.LoggedIn) {
@@ -21,4 +21,3 @@ fun HomePage() {
             TextButton("Login") { ctx.router.navigateTo("/account/login") }
         }
     }
-}

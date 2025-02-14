@@ -1,4 +1,4 @@
-package chat
+package chat.site
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -18,8 +18,6 @@ import com.varabyte.kobweb.silk.theme.colors.ColorMode
 import com.varabyte.kobweb.silk.theme.colors.loadFromLocalStorage
 import com.varabyte.kobweb.silk.theme.colors.saveToLocalStorage
 import com.varabyte.kobweb.silk.theme.colors.systemPreference
-
-import kotlinx.browser.localStorage
 import org.jetbrains.compose.web.css.vh
 
 private const val COLOR_MODE_KEY = "chat:app:colorMode"
@@ -30,16 +28,25 @@ fun updateTheme(ctx: InitSilkContext) {
 }
 
 @InitSilk
-fun registerGlobalStyles(ctx: InitSilkContext) = ctx.stylesheet.apply {
-    registerStyleBase("body") {
-        Modifier
-            .fontFamily(
-                "-apple-system", "BlinkMacSystemFont", "Segoe UI", "Roboto", "Oxygen", "Ubuntu",
-                "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue", "sans-serif"
-            )
-            .lineHeight(1.4)
+fun registerGlobalStyles(ctx: InitSilkContext) =
+    ctx.stylesheet.apply {
+        registerStyleBase("body") {
+            Modifier
+                .fontFamily(
+                    "-apple-system",
+                    "BlinkMacSystemFont",
+                    "Segoe UI",
+                    "Roboto",
+                    "Oxygen",
+                    "Ubuntu",
+                    "Cantarell",
+                    "Fira Sans",
+                    "Droid Sans",
+                    "Helvetica Neue",
+                    "sans-serif",
+                ).lineHeight(1.4)
+        }
     }
-}
 
 @App
 @Composable

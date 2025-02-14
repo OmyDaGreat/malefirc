@@ -31,13 +31,14 @@ import org.jetbrains.compose.web.css.px
 import org.jetbrains.compose.web.dom.Br
 import org.jetbrains.compose.web.dom.Text
 
-val ChatBoxStyle = CssStyle.base {
-    Modifier
-        .padding(5.px)
-        .borderRadius(5.px)
-        .border { style(LineStyle.Solid) }
-        .overflow { y(Overflow.Auto) }
-}
+val ChatBoxStyle =
+    CssStyle.base {
+        Modifier
+            .padding(5.px)
+            .borderRadius(5.px)
+            .border { style(LineStyle.Solid) }
+            .overflow { y(Overflow.Auto) }
+    }
 
 private fun Message.toChatLine() = "${this.username}: ${this.text}"
 
@@ -45,10 +46,11 @@ private fun Message.toChatLine() = "${this.username}: ${this.text}"
 @Composable
 fun ChatPage() {
     PageLayout("Chat") {
-        val account = (LoginState.current as? LoginState.LoggedIn)?.account ?: run {
-            LoggedOutMessage()
-            return@PageLayout
-        }
+        val account =
+            (LoginState.current as? LoginState.LoggedIn)?.account ?: run {
+                LoggedOutMessage()
+                return@PageLayout
+            }
 
         val messages = remember { mutableStateListOf<Message>() }
         val chatStream = remember { ApiStream("chat") }
@@ -60,7 +62,11 @@ fun ChatPage() {
 
         CenteredColumnContent {
             Column(
-                ChatBoxStyle.toModifier().height(80.percent).width(G.Ui.Width.Large).fontSize(G.Ui.Text.MediumSmall)
+                ChatBoxStyle
+                    .toModifier()
+                    .height(80.percent)
+                    .width(G.Ui.Width.Large)
+                    .fontSize(G.Ui.Text.MediumSmall),
             ) {
                 messages.forEach { entry ->
                     Text(entry.toChatLine())
@@ -81,13 +87,13 @@ fun ChatPage() {
                     { message = it },
                     Modifier.width(70.percent).align(Alignment.BottomStart),
                     ref = ref { it.focus() },
-                    onCommit = ::sendMessage
+                    onCommit = ::sendMessage,
                 )
                 TextButton(
                     "Send",
                     Modifier.width(20.percent).align(Alignment.BottomEnd),
                     enabled = message.isNotBlank(),
-                    onClick = ::sendMessage
+                    onClick = ::sendMessage,
                 )
             }
         }

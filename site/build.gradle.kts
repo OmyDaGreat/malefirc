@@ -25,7 +25,7 @@ kotlin {
             implementation(libs.kobweb.silk)
         }
         jvmMain.dependencies {
-            compileOnly(libs.kobweb.api) // Provided by Kobweb backend at runtime
+            compileOnly(libs.kobweb.api)
         }
     }
 }

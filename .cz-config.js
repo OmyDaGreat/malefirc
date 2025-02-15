@@ -5,7 +5,6 @@ module.exports = {
     { value: 'feat', name: 'feat:     A new feature' },
     { value: 'fix', name: 'fix:      A bug fix' },
     { value: 'docs', name: 'docs:     Documentation only changes' },
-    { value: 'tune', name: 'tune:     Changes that affect the tuning of the robot' },
     {
       value: 'style',
       name: 'style:    Changes that do not affect the meaning of the code\n            (white-space, formatting, missing semi-colons, etc)',
@@ -30,7 +29,7 @@ module.exports = {
     { value: 'rename', name: 'rename:   Rename a class or function (or something else)' },
   ],
 
-  scopes: [{ name: 'robot' }, { name: 'swerve' }, { name: 'elevator' }, { name: 'pivot' }, { name: 'led' }, { name: 'photon' }, { name: 'robotparams' }, { name: 'command' }, { name: 'utils' }, { name: 'project' }],
+  scopes: [{ name: 'project' }, {name: 'auth'}, {name: 'chat'}, {name: 'core'}, {name: 'site'}],
 
   usePreparedCommit: false, // to re-use commit from ./.git/COMMIT_EDITMSG
   allowTicketNumber: false,
@@ -47,11 +46,6 @@ module.exports = {
       { name: 'cz' },
       { name: 'commitlint' },
       { name: 'husky' }
-    ],
-    tune: [
-      { name: 'swerve' },
-      { name: 'pivot' },
-      { name: 'elevator' }
     ],
     update: []
   },

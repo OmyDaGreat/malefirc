@@ -33,12 +33,13 @@ fun CreateAccountPage() {
             var password2 by remember { mutableStateOf("") }
             var errorText by remember { mutableStateOf("") }
 
-            errorText = when {
-                username.any { it.isWhitespace() } -> "Username cannot contain whitespace."
-                password1.any { it.isWhitespace() } -> "Password cannot contain whitespace."
-                password1 != password2 -> "Passwords don't match."
-                else -> errorText
-            }
+            errorText =
+                when {
+                    username.any { it.isWhitespace() } -> "Username cannot contain whitespace."
+                    password1.any { it.isWhitespace() } -> "Password cannot contain whitespace."
+                    password1 != password2 -> "Passwords don't match."
+                    else -> errorText
+                }
 
             fun isValid() = username.isNotEmpty() && password1.isNotEmpty() && errorText.isEmpty()
 
@@ -48,8 +49,11 @@ fun CreateAccountPage() {
                 val account = Account(username, password1)
                 val accountBytes = Json.encodeToString(account).encodeToByteArray()
                 coroutine.launch {
-                    val response = window.api.post("/account/create", body = accountBytes)
-                        .decodeToString().let { Json.decodeFromString(CreateAccountResponse.serializer(), it) }
+                    val response =
+                        window.api
+                            .post("/account/create", body = accountBytes)
+                            .decodeToString()
+                            .let { Json.decodeFromString(CreateAccountResponse.serializer(), it) }
 
                     if (response.succeeded) {
                         LoginState.current = LoginState.LoggedIn(account)
@@ -63,23 +67,32 @@ fun CreateAccountPage() {
             TitledTextInput(
                 "Username",
                 username,
-                { errorText = ""; username = it },
+                {
+                    errorText = ""
+                    username = it
+                },
                 ref = ref { it.focus() },
-                onCommit = ::tryCreate
+                onCommit = ::tryCreate,
             )
             TitledTextInput(
                 "Password",
                 password1,
-                { errorText = ""; password1 = it },
+                {
+                    errorText = ""
+                    password1 = it
+                },
                 masked = true,
-                onCommit = ::tryCreate
+                onCommit = ::tryCreate,
             )
             TitledTextInput(
                 "Confirm Password",
                 password2,
-                { errorText = ""; password2 = it },
+                {
+                    errorText = ""
+                    password2 = it
+                },
                 masked = true,
-                onCommit = ::tryCreate
+                onCommit = ::tryCreate,
             )
 
             TextButton("Create Account", enabled = isValid(), onClick = ::tryCreate)

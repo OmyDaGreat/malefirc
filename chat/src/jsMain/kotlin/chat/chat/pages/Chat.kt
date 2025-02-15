@@ -3,11 +3,11 @@ package chat.chat.pages
 import androidx.compose.runtime.*
 import chat.auth.components.sections.LoggedOutMessage
 import chat.auth.model.auth.LoginState
-import chat.chat.model.Message
 import chat.core.G
 import chat.core.components.layouts.PageLayout
 import chat.core.components.sections.CenteredColumnContent
 import chat.core.components.widgets.TextButton
+import chat.model.Message
 import com.varabyte.kobweb.compose.css.Overflow
 import com.varabyte.kobweb.compose.dom.ref
 import com.varabyte.kobweb.compose.foundation.layout.Box

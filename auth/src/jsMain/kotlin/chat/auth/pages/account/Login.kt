@@ -32,14 +32,18 @@ fun LoginPage() {
             var password by remember { mutableStateOf("") }
             var errorText by remember { mutableStateOf("") }
 
-            errorText = when {
-                username.any { it.isWhitespace() } -> "Username cannot contain whitespace."
-                password.any { it.isWhitespace() } -> "Password cannot contain whitespace."
-                else -> errorText
-            }
+            errorText =
+                when {
+                    username.any { it.isWhitespace() } -> "Username cannot contain whitespace."
+                    password.any { it.isWhitespace() } -> "Password cannot contain whitespace."
+                    else -> errorText
+                }
 
-            fun isValid() = username.isNotEmpty() && username.none { it.isWhitespace() }
-                && password.isNotEmpty() && password.none { it.isWhitespace() }
+            fun isValid() =
+                username.isNotEmpty() &&
+                    username.none { it.isWhitespace() } &&
+                    password.isNotEmpty() &&
+                    password.none { it.isWhitespace() }
 
             fun tryLogin() {
                 if (!isValid()) return
@@ -47,8 +51,11 @@ fun LoginPage() {
                 val account = Account(username, password)
                 val accountBytes = Json.encodeToString(account).encodeToByteArray()
                 coroutine.launch {
-                    val response = window.api.post("/account/login", body = accountBytes)
-                        .decodeToString().let { Json.decodeFromString(LoginResponse.serializer(), it) }
+                    val response =
+                        window.api
+                            .post("/account/login", body = accountBytes)
+                            .decodeToString()
+                            .let { Json.decodeFromString(LoginResponse.serializer(), it) }
 
                     if (response.succeeded) {
                         LoginState.current = LoginState.LoggedIn(account)
@@ -62,16 +69,22 @@ fun LoginPage() {
             TitledTextInput(
                 "Username",
                 username,
-                { errorText = ""; username = it },
+                {
+                    errorText = ""
+                    username = it
+                },
                 ref = ref { it.focus() },
-                onCommit = ::tryLogin
+                onCommit = ::tryLogin,
             )
             TitledTextInput(
                 "Password",
                 password,
-                { errorText = ""; password = it },
+                {
+                    errorText = ""
+                    password = it
+                },
                 masked = true,
-                onCommit = ::tryLogin
+                onCommit = ::tryLogin,
             )
 
             TextButton("Login", enabled = isValid(), onClick = ::tryLogin)

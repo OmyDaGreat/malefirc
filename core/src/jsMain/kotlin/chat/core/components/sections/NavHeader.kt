@@ -18,7 +18,6 @@ import com.varabyte.kobweb.silk.components.icons.fa.FaHouse
 import com.varabyte.kobweb.silk.components.icons.fa.FaMoon
 import com.varabyte.kobweb.silk.components.icons.fa.FaQuestion
 import com.varabyte.kobweb.silk.components.icons.fa.FaSun
-import com.varabyte.kobweb.silk.components.text.SpanText
 import com.varabyte.kobweb.silk.style.CssStyle
 import com.varabyte.kobweb.silk.style.base
 import com.varabyte.kobweb.silk.style.common.SmoothColorStyle
@@ -27,9 +26,9 @@ import com.varabyte.kobweb.silk.theme.colors.ColorMode
 import com.varabyte.kobweb.silk.theme.colors.palette.background
 import com.varabyte.kobweb.silk.theme.colors.palette.color
 import com.varabyte.kobweb.silk.theme.colors.palette.toPalette
-import org.jetbrains.compose.web.css.Color
 import org.jetbrains.compose.web.css.percent
 import org.jetbrains.compose.web.css.px
+import org.jetbrains.compose.web.dom.Text
 
 val NavHeaderStyle =
     CssStyle.base(extraModifier = { SmoothColorStyle.toModifier() }) {
@@ -113,10 +112,7 @@ fun NavHeader() {
         }
 
         Box(TitleStyle.toModifier().align(Alignment.Center)) {
-            Row(TitleStyle.toModifier().align(Alignment.Center)) {
-                SpanText("Malefirc ")
-                SpanText(0x1f47e.toChar().toString(), modifier = Modifier.color(Color.white))
-            }
+            Text("Kobweb Chat \uD83D\uDCAC")
         }
     }
 }

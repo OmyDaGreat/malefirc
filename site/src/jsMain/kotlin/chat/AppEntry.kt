@@ -1,4 +1,4 @@
-package chat.site
+package chat
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect

@@ -3,6 +3,8 @@ jetbrains-compose = "1.7.1"
 kobweb = "0.20.3"
 kotlin = "2.1.10"
 kotlinx-serialization-json = "1.4.1"
+exposed = "0.59.0"
+postgres = "42.7.5"
 
 [libraries]
 compose-html-core = { module = "org.jetbrains.compose.html:html-core", version.ref = "jetbrains-compose" }
@@ -12,6 +14,10 @@ kobweb-core = { module = "com.varabyte.kobweb:kobweb-core", version.ref = "kobwe
 kobweb-silk = { module = "com.varabyte.kobweb:kobweb-silk", version.ref = "kobweb" }
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinx-serialization-json" }
 silk-icons-fa = { module = "com.varabyte.kobwebx:silk-icons-fa", version.ref = "kobweb" }
+exposed-core = { module = "org.jetbrains.exposed:exposed-core", version.ref = "exposed" }
+exposed-dao = { module = "org.jetbrains.exposed:exposed-dao", version.ref = "exposed" }
+exposed-jdbc = { module = "org.jetbrains.exposed:exposed-jdbc", version.ref = "exposed" }
+postgres = { module = "org.postgresql:postgresql", version.ref = "postgres" }
 
 [plugins]
 compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
@@ -20,3 +26,6 @@ kobweb-library = { id = "com.varabyte.kobweb.library", version.ref = "kobweb" }
 kobwebx-markdown = { id = "com.varabyte.kobwebx.markdown", version.ref = "kobweb" }
 kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
 kotlinx-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+
+[bundles]
+exposed = ["exposed-core", "exposed-dao", "exposed-jdbc"]

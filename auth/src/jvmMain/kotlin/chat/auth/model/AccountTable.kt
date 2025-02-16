@@ -1,21 +1,27 @@
 package chat.auth.model
 
+import com.varabyte.kobweb.api.init.InitApi
+import com.varabyte.kobweb.api.init.InitApiContext
 import org.jetbrains.exposed.dao.id.IntIdTable
+import org.jetbrains.exposed.sql.Database
+import org.jetbrains.exposed.sql.SchemaUtils
+import org.jetbrains.exposed.sql.transactions.transaction
 
-/**
- * Object representing the Account table in the database.
- * This table stores user account information.
- */
-object AccountTable : IntIdTable() {
-    /**
-     * Column for storing the username.
-     * It is a unique index with a maximum length of 50 characters.
-     */
+object AccountTable : IntIdTable("account") {
     val username = varchar("username", 50).uniqueIndex()
+    val password = varchar("password", 128)
+}
 
-    /**
-     * Column for storing the password.
-     * It has a fixed length of 64 characters.
-     */
-    val password = varchar("password", 64)
+@InitApi
+fun initDatabase(ctx: InitApiContext) {
+    Database.connect(
+        url = "jdbc:postgresql://irc.malefic.xyz:17/irc",
+        driver = "org.postgresql.Driver",
+        user = "malefic",
+        password = "hidden1!",
+    )
+
+    transaction {
+        SchemaUtils.create(AccountTable)
+    }
 }

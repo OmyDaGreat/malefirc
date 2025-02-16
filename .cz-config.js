@@ -25,11 +25,11 @@ module.exports = {
     { value: 'wip', name: 'wip:      Work in progress' },
     { value: 'revert', name: 'revert:   Revert to a prior commit' },
     { value: 'removal', name: 'removal:  Remove a feature or code section' },
-    { value: 'update', name: 'update:   Update a dependency or vendor dep' },
+    { value: 'update', name: 'update:   Update a dependency' },
     { value: 'rename', name: 'rename:   Rename a class or function (or something else)' },
   ],
 
-  scopes: [{ name: 'project' }, {name: 'auth'}, {name: 'chat'}, {name: 'core'}, {name: 'site'}],
+  scopes: [{ name: 'auth' }, { name: 'chat' }, { name: 'core' }, { name: 'site' }, { name: 'project' }],
 
   usePreparedCommit: false, // to re-use commit from ./.git/COMMIT_EDITMSG
   allowTicketNumber: false,

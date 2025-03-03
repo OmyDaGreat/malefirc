@@ -3,7 +3,7 @@ jetbrains-compose = "1.7.3"
 kobweb = "0.20.3"
 kotlin = "2.1.10"
 kotlinx-serialization-json = "1.8.0"
-exposed = "0.59.0"
+exposed = "0.60.0"
 postgres = "42.7.5"
 
 [libraries]

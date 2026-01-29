@@ -4,7 +4,7 @@ kobweb = "0.22.0"
 kotlin = "2.1.21"
 kotlinx-serialization-json = "1.8.1"
 exposed = "1.0.0"
-postgres = "42.7.5"
+postgres = "42.7.9"
 
 [libraries]
 compose-html-core = { module = "org.jetbrains.compose.html:html-core", version.ref = "jetbrains-compose" }

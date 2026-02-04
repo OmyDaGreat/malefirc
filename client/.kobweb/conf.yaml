@@ -1,0 +1,14 @@
+site:
+  title: "Malefirc"
+
+server:
+  files:
+    dev:
+      contentRoot: "build/processedResources/js/main/public"
+      script: "build/kotlin-webpack/js/developmentExecutable/client.js"
+      api: "build/libs/client.jar"
+    prod:
+      script: "build/kotlin-webpack/js/productionExecutable/client.js"
+      siteRoot: ".kobweb/site"
+
+  port: 8080

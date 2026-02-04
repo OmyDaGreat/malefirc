@@ -27,7 +27,6 @@ gradle.settingsEvaluated {
 
 rootProject.name = "malefirc"
 
-include(":core")
-include(":auth")
-include(":chat")
-include(":site")
+include(":shared")
+include(":server")
+include(":client")

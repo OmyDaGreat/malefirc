@@ -25,7 +25,7 @@ gradle.settingsEvaluated {
     dependencyResolutionManagement.repositories { kobwebSnapshots() }
 }
 
-rootProject.name = "chat"
+rootProject.name = "malefirc"
 
 include(":core")
 include(":auth")

@@ -7,7 +7,7 @@ plugins {
     alias(libs.plugins.kobwebx.markdown)
 }
 
-group = "chat.core"
+group = "xyz.malefic.irc.core"
 version = "1.0-SNAPSHOT"
 
 kotlin {

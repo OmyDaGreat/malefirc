@@ -7,7 +7,7 @@ plugins {
     alias(libs.plugins.kobweb.library)
 }
 
-group = "chat.auth"
+group = "xyz.malefic.irc.auth"
 version = "1.0-SNAPSHOT"
 
 kotlin {

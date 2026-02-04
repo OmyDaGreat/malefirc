@@ -3,10 +3,14 @@ import com.varabyte.kobweb.gradle.application.util.configAsKobwebApplication
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
     alias(libs.plugins.compose.compiler)
-    id(libs.plugins.kobweb.application.get().pluginId)
+    id(
+        libs.plugins.kobweb.application
+            .get()
+            .pluginId,
+    )
 }
 
-group = "chat.site"
+group = "xyz.malefic.irc.site"
 version = "1.0-SNAPSHOT"
 
 kotlin {

@@ -18,7 +18,7 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.bundles.exposed)
     implementation(libs.postgres)
-    implementation(libs.logback.classic)
+    implementation(libs.kermit)
     implementation(libs.kobweb.api)
     implementation(libs.jbcrypt)
 }

@@ -6,9 +6,8 @@ import com.varabyte.kobweb.api.http.HttpMethod
 import com.varabyte.kobweb.api.http.readBodyText
 import com.varabyte.kobweb.api.http.setBodyText
 import kotlinx.serialization.json.Json
-import org.jetbrains.exposed.v1.core.eq
-import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import xyz.malefic.irc.auth.model.AccountEntity
 import xyz.malefic.irc.auth.model.AccountTable
 import xyz.malefic.irc.auth.model.auth.Account
 import xyz.malefic.irc.auth.model.auth.LoginResponse
@@ -21,13 +20,10 @@ fun login(ctx: ApiContext) {
 
     val succeeded =
         transaction {
-            val result =
-                AccountTable
-                    .select(AccountTable.username eq account.username)
-                    .singleOrNull()
+            val accountEntity = AccountEntity.find { AccountTable.username eq account.username }.singleOrNull()
             
-            result?.let {
-                PasswordHash.verify(account.password, it[AccountTable.password])
+            accountEntity?.let {
+                PasswordHash.verify(account.password, it.password)
             } ?: false
         }
 

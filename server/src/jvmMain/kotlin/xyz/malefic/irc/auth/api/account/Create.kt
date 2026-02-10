@@ -6,10 +6,8 @@ import com.varabyte.kobweb.api.http.HttpMethod
 import com.varabyte.kobweb.api.http.readBodyText
 import com.varabyte.kobweb.api.http.setBodyText
 import kotlinx.serialization.json.Json
-import org.jetbrains.exposed.v1.core.eq
-import org.jetbrains.exposed.v1.jdbc.insert
-import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import xyz.malefic.irc.auth.model.AccountEntity
 import xyz.malefic.irc.auth.model.AccountTable
 import xyz.malefic.irc.auth.model.auth.Account
 import xyz.malefic.irc.auth.model.auth.CreateAccountResponse
@@ -22,11 +20,11 @@ fun create(ctx: ApiContext) {
 
     val result =
         transaction {
-            val exists = AccountTable.select(AccountTable.username eq account.username).count() > 0
+            val exists = AccountEntity.find { AccountTable.username eq account.username }.count() > 0
             if (!exists) {
-                AccountTable.insert {
-                    it[username] = account.username
-                    it[password] = PasswordHash.hash(account.password)
+                AccountEntity.new {
+                    username = account.username
+                    password = PasswordHash.hash(account.password)
                 }
             }
             CreateAccountResponse(!exists)

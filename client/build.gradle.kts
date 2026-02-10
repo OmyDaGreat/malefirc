@@ -4,7 +4,11 @@ plugins {
     alias(libs.plugins.kotlin.multiplatform)
     alias(libs.plugins.compose.compiler)
     alias(libs.plugins.kotlinx.serialization)
-    id(libs.plugins.kobweb.application.get().pluginId)
+    id(
+        libs.plugins.kobweb.application
+            .get()
+            .pluginId,
+    )
 }
 
 group = "xyz.malefic.irc.client"
@@ -28,7 +32,7 @@ kotlin {
         jvmMain.dependencies {
             implementation(libs.ktor.network)
             implementation(libs.kotlinx.coroutines.core)
-            implementation(libs.logback.classic)
+            implementation(libs.kermit)
             compileOnly(libs.kobweb.api)
         }
     }

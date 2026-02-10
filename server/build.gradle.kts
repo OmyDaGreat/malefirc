@@ -20,4 +20,5 @@ dependencies {
     implementation(libs.postgres)
     implementation(libs.logback.classic)
     implementation(libs.kobweb.api)
+    implementation(libs.jbcrypt)
 }

@@ -13,6 +13,7 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import xyz.malefic.irc.auth.model.AccountTable
 import xyz.malefic.irc.auth.model.auth.Account
 import xyz.malefic.irc.auth.model.auth.CreateAccountResponse
+import xyz.malefic.irc.auth.util.PasswordHash
 
 @Api
 fun create(ctx: ApiContext) {
@@ -25,7 +26,7 @@ fun create(ctx: ApiContext) {
             if (!exists) {
                 AccountTable.insert {
                     it[username] = account.username
-                    it[password] = account.password // TODO: Hash the password
+                    it[password] = PasswordHash.hash(account.password)
                 }
             }
             CreateAccountResponse(!exists)

@@ -6,13 +6,13 @@ import com.varabyte.kobweb.api.http.HttpMethod
 import com.varabyte.kobweb.api.http.readBodyText
 import com.varabyte.kobweb.api.http.setBodyText
 import kotlinx.serialization.json.Json
-import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import xyz.malefic.irc.auth.model.AccountTable
 import xyz.malefic.irc.auth.model.auth.Account
 import xyz.malefic.irc.auth.model.auth.LoginResponse
+import xyz.malefic.irc.auth.util.PasswordHash
 
 @Api
 fun login(ctx: ApiContext) {
@@ -21,10 +21,14 @@ fun login(ctx: ApiContext) {
 
     val succeeded =
         transaction {
-            AccountTable
-                .select(
-                    (AccountTable.username eq account.username) and (AccountTable.password eq account.password),
-                ).count() > 0
+            val result =
+                AccountTable
+                    .select(AccountTable.username eq account.username)
+                    .singleOrNull()
+            
+            result?.let {
+                PasswordHash.verify(account.password, it[AccountTable.password])
+            } ?: false
         }
 
     ctx.res.setBodyText(Json.encodeToString(LoginResponse(succeeded)))

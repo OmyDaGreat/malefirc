@@ -9,7 +9,7 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 
 object AccountTable : IntIdTable("account") {
     val username = varchar("username", 50).uniqueIndex()
-    val password = varchar("password", 128)
+    val password = varchar("password", 60)
 }
 
 @InitApi

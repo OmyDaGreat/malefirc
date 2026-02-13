@@ -2,10 +2,10 @@ package xyz.malefic.irc.auth.model
 
 import com.varabyte.kobweb.api.init.InitApi
 import com.varabyte.kobweb.api.init.InitApiContext
-import org.jetbrains.exposed.v1.core.dao.IntEntity
-import org.jetbrains.exposed.v1.core.dao.IntEntityClass
 import org.jetbrains.exposed.v1.core.dao.id.EntityID
 import org.jetbrains.exposed.v1.core.dao.id.IntIdTable
+import org.jetbrains.exposed.v1.dao.IntEntity
+import org.jetbrains.exposed.v1.dao.IntEntityClass
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -15,9 +15,11 @@ object AccountTable : IntIdTable("account") {
     val password = varchar("password", 60)
 }
 
-class AccountEntity(id: EntityID<Int>) : IntEntity(id) {
+class AccountEntity(
+    id: EntityID<Int>,
+) : IntEntity(id) {
     companion object : IntEntityClass<AccountEntity>(AccountTable)
-    
+
     var username by AccountTable.username
     var password by AccountTable.password
 }

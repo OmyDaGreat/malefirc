@@ -13,6 +13,10 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 object AccountTable : IntIdTable("account") {
     val username = varchar("username", 50).uniqueIndex()
     val password = varchar("password", 60)
+    val email = varchar("email", 255).nullable()
+    val createdAt = long("created_at").clientDefault { System.currentTimeMillis() }
+    val lastLogin = long("last_login").nullable()
+    val isVerified = bool("is_verified").default(false)
 }
 
 class AccountEntity(
@@ -22,15 +26,25 @@ class AccountEntity(
 
     var username by AccountTable.username
     var password by AccountTable.password
+    var email by AccountTable.email
+    var createdAt by AccountTable.createdAt
+    var lastLogin by AccountTable.lastLogin
+    var isVerified by AccountTable.isVerified
 }
 
 @InitApi
 fun initDatabase(ctx: InitApiContext) {
+    val dbHost = System.getenv("DB_HOST") ?: "localhost"
+    val dbPort = System.getenv("DB_PORT") ?: "5432"
+    val dbName = System.getenv("DB_NAME") ?: "malefirc"
+    val dbUser = System.getenv("DB_USER") ?: "malefirc"
+    val dbPassword = System.getenv("DB_PASSWORD") ?: "malefirc"
+    
     Database.connect(
-        url = "jdbc:postgresql://irc.malefic.xyz:17/irc",
+        url = "jdbc:postgresql://$dbHost:$dbPort/$dbName",
         driver = "org.postgresql.Driver",
-        user = "malefic",
-        password = "hidden1!",
+        user = dbUser,
+        password = dbPassword,
     )
 
     transaction {

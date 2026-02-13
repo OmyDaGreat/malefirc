@@ -83,13 +83,9 @@ PRIVMSG #test :Hello!
 
 ```
 malefirc/
-├── irc-protocol/          ✅ Shared protocol implementation
-├── irc-server/            ✅ Standalone IRC server
-├── irc-client/            ✅ Terminal IRC client
-├── core/                  📦 Web UI components (existing)
-├── auth/                  📦 Authentication (existing)
-├── chat/                  📦 Web chat (existing)
-└── site/                  📦 Kobweb web app (existing)
+├── shared/          ✅ Shared protocol implementation
+├── server/            ✅ Standalone IRC server
+├── client/            ✅ Terminal IRC client
 ```
 
 ## What Works

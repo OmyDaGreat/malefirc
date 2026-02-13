@@ -6,19 +6,21 @@ A complete IRC (Internet Relay Chat) implementation in Kotlin, featuring a stand
 
 This project is organized into multiple modules:
 
-- **irc-protocol**: Shared IRC protocol implementation (RFC 1459/2812)
-- **irc-server**: Standalone IRC server (TCP socket server on port 6667)
-- **irc-client**: Terminal-based IRC client
-- **core**: Common UI components for web client
-- **auth**: Authentication and user management (web)
-- **chat**: Chat UI (web)
-- **site**: Web application (Kobweb-based)
+- **shared**: Shared IRC protocol implementation (RFC 1459/2812)
+- **server**: Standalone IRC server (TCP socket server on port 6667)
+- **client**: Terminal-based IRC client
 
 ## Features
 
 ### IRC Server
 - ✅ RFC 1459/2812 compliant protocol implementation
 - ✅ User connection management (NICK, USER registration)
+- ✅ **User authentication (PASS command, SASL PLAIN)**
+- ✅ **PostgreSQL database integration**
+- ✅ **Password hashing with BCrypt**
+- ✅ **Message history and persistence**
+- ✅ **Full-text message search**
+- ✅ **Message archival and cleanup**
 - ✅ Channel operations (JOIN, PART, TOPIC, NAMES, LIST)
 - ✅ Message routing (PRIVMSG to channels and users)
 - ✅ Server queries (WHO, LIST, NAMES)
@@ -36,6 +38,34 @@ This project is organized into multiple modules:
 - ✅ Connect to any RFC-compliant IRC server
 
 ## Quick Start
+
+### Using Docker (Recommended)
+
+The easiest way to run Malefirc is with Docker Compose:
+
+```bash
+# Start all services (PostgreSQL, IRC Server, Web Client)
+docker-compose up -d
+
+# View logs
+docker-compose logs -f irc-server
+
+# Stop services
+docker-compose down
+```
+
+**Services:**
+- IRC Server: `localhost:6667`
+- Web Client: http://localhost:8080
+- PostgreSQL: `localhost:5432`
+
+See [DOCKER.md](DOCKER.md) for complete Docker documentation.
+
+### Running Locally
+
+#### Prerequisites
+- JDK 17 or higher
+- PostgreSQL (optional, for authentication)
 
 ### Running the IRC Server
 
@@ -116,8 +146,11 @@ weechat
 ### Implemented Commands
 
 **User Commands:**
+- PASS - Password authentication
 - NICK - Set nickname
 - USER - User registration
+- CAP - Capability negotiation
+- AUTHENTICATE - SASL authentication
 - JOIN - Join channels
 - PART - Leave channels
 - PRIVMSG - Send messages
@@ -134,6 +167,9 @@ weechat
 - 332: Topic reply
 - 353, 366: NAMES replies
 - 401-502: Error codes
+- 900-907: SASL authentication replies
+
+See [AUTHENTICATION.md](AUTHENTICATION.md) for authentication details.
 
 ## Development
 
@@ -153,18 +189,18 @@ weechat
 
 ```
 malefirc/
-├── irc-protocol/       # Core IRC protocol (multiplatform)
+├── shared/       # Core IRC protocol (multiplatform)
 │   └── src/commonMain/kotlin/xyz/malefic/irc/protocol/
 │       ├── IRCMessage.kt      # Message parsing/serialization
 │       ├── IRCCommand.kt      # Command constants
 │       ├── IRCReply.kt        # Numeric reply codes
 │       └── IRCMessageBuilder.kt # Helper functions
-├── irc-server/         # IRC server (JVM)
-│   └── src/jvmMain/kotlin/xyz/malefic/irc/server/
+├── server/         # IRC server (JVM)
+│   └── src/main/kotlin/xyz/malefic/irc/server/
 │       ├── IRCServer.kt       # Main server implementation
 │       ├── IRCModels.kt       # Data models
 │       └── Main.kt            # Entry point
-├── irc-client/         # IRC client (JVM)
+├── client/         # IRC client (JVM)
 │   └── src/jvmMain/kotlin/xyz/malefic/irc/client/
 │       ├── IRCClient.kt       # Client implementation
 │       └── Main.kt            # Terminal UI
@@ -173,16 +209,50 @@ malefirc/
 
 ## Roadmap
 
-Future enhancements:
-- [ ] User modes and channel modes (op, voice, etc.)
-- [ ] Channel password protection
-- [ ] Ban/kick functionality
-- [ ] SSL/TLS support
-- [ ] WebSocket bridge for web client
-- [ ] Message persistence and history
-- [ ] User authentication integration with PostgreSQL
-- [ ] SASL authentication
-- [ ] DCC file transfer support
+Future enhancements (see implementation plan for details):
+
+### Phase 1: Authentication & Database ✅ COMPLETED
+- [x] User authentication with password hashing (BCrypt)
+- [x] SASL authentication (PLAIN mechanism)
+- [x] PostgreSQL database integration
+- [x] PASS command support
+
+### Phase 2: Message Persistence ✅ COMPLETED
+- [x] Message history storage in database
+- [x] History retrieval API with pagination
+- [x] Private message logging
+- [x] Message search functionality
+- [x] Automatic archival/cleanup system
+
+See [MESSAGE_HISTORY.md](MESSAGE_HISTORY.md) for complete documentation.
+
+### Phase 3: User & Channel Modes (Next)
+- [ ] User modes (invisible, operator, away, etc.)
+- [ ] Channel operator (+o) and voice (+v) modes
+- [ ] Channel modes (moderated, secret, invite-only, etc.)
+- [ ] WHOIS command implementation
+
+### Phase 4: Channel Management
+- [ ] Channel password protection (+k mode)
+- [ ] INVITE/KICK/BAN commands
+- [ ] Channel user limits (+l mode)
+- [ ] OPER command for server operators
+
+### Phase 5: SSL/TLS Support
+- [ ] SSL/TLS encryption
+- [ ] Port 6697 for secure connections
+- [ ] STARTTLS command support
+
+### Phase 6: WebSocket Bridge
+- [ ] WebSocket to IRC protocol bridge
+- [ ] Real-time web client connection
+- [ ] Message routing between protocols
+
+### Phase 7: Advanced Features
+- [ ] DCC file transfer support (optional)
+- [ ] Connection throttling and rate limiting
+- [ ] Advanced logging and metrics
+- [ ] IRC services (NickServ, ChanServ)
 
 ## Contributing
 

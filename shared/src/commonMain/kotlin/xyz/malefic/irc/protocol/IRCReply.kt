@@ -11,6 +11,15 @@ object IRCReply {
     const val RPL_MYINFO = "004"
     const val RPL_BOUNCE = "005"
     
+    // SASL
+    const val RPL_LOGGEDIN = "900"
+    const val RPL_LOGGEDOUT = "901"
+    const val RPL_SASLSUCCESS = "903"
+    const val RPL_SASLFAIL = "904"
+    const val RPL_SASLTOOLONG = "905"
+    const val RPL_SASLABORTED = "906"
+    const val RPL_SASLALREADY = "907"
+    
     // User/Service queries
     const val RPL_USERHOST = "302"
     const val RPL_ISON = "303"
@@ -25,6 +34,7 @@ object IRCReply {
     const val RPL_WHOISIDLE = "317"
     const val RPL_ENDOFWHOIS = "318"
     const val RPL_WHOISCHANNELS = "319"
+    const val RPL_WHOISACCOUNT = "330"
     
     // LIST replies
     const val RPL_LISTSTART = "321"

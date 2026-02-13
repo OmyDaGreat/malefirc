@@ -82,6 +82,18 @@ class IRCServer(
         val user = connection.user
 
         when (message.command) {
+            IRCCommand.PASS -> {
+                handlePass(connection, message)
+            }
+
+            IRCCommand.CAP -> {
+                handleCap(connection, message)
+            }
+
+            IRCCommand.AUTHENTICATE -> {
+                handleAuthenticate(connection, message)
+            }
+
             IRCCommand.NICK -> {
                 handleNick(connection, message)
             }
@@ -137,6 +149,235 @@ class IRCServer(
                             "${message.command} :Unknown command",
                         ),
                     )
+                }
+            }
+        }
+    }
+
+    private suspend fun handlePass(
+        connection: ClientConnection,
+        message: IRCMessage,
+    ) {
+        val user = connection.user
+        
+        if (user.registered) {
+            sendMessage(
+                connection,
+                IRCMessageBuilder.numericError(
+                    serverName,
+                    user.nickname ?: "*",
+                    IRCReply.ERR_ALREADYREGISTERED,
+                    "You may not reregister",
+                ),
+            )
+            return
+        }
+        
+        val password = message.params.firstOrNull()
+        if (password.isNullOrBlank()) {
+            sendMessage(
+                connection,
+                IRCMessageBuilder.numericError(
+                    serverName,
+                    user.nickname ?: "*",
+                    IRCReply.ERR_NEEDMOREPARAMS,
+                    "PASS :Not enough parameters",
+                ),
+            )
+            return
+        }
+        
+        user.password = password
+    }
+
+    private suspend fun handleCap(
+        connection: ClientConnection,
+        message: IRCMessage,
+    ) {
+        val user = connection.user
+        val subcommand = message.params.firstOrNull()?.uppercase()
+        
+        when (subcommand) {
+            "LS" -> {
+                // List supported capabilities
+                sendMessage(
+                    connection,
+                    IRCMessage(
+                        prefix = serverName,
+                        command = "CAP",
+                        params = listOf(user.nickname ?: "*", "LS"),
+                        trailing = "sasl"
+                    )
+                )
+            }
+            "REQ" -> {
+                // Client requests capabilities
+                val caps = message.trailing?.split(" ") ?: emptyList()
+                if (caps.contains("sasl")) {
+                    sendMessage(
+                        connection,
+                        IRCMessage(
+                            prefix = serverName,
+                            command = "CAP",
+                            params = listOf(user.nickname ?: "*", "ACK"),
+                            trailing = "sasl"
+                        )
+                    )
+                } else {
+                    sendMessage(
+                        connection,
+                        IRCMessage(
+                            prefix = serverName,
+                            command = "CAP",
+                            params = listOf(user.nickname ?: "*", "NAK"),
+                            trailing = message.trailing
+                        )
+                    )
+                }
+            }
+            "END" -> {
+                // Client done with capability negotiation
+                // Nothing special needed
+            }
+            "LIST" -> {
+                // List active capabilities
+                sendMessage(
+                    connection,
+                    IRCMessage(
+                        prefix = serverName,
+                        command = "CAP",
+                        params = listOf(user.nickname ?: "*", "LIST"),
+                        trailing = if (user.authenticated) "sasl" else ""
+                    )
+                )
+            }
+        }
+    }
+
+    private var saslBuffer = ConcurrentHashMap<ClientConnection, String>()
+
+    private suspend fun handleAuthenticate(
+        connection: ClientConnection,
+        message: IRCMessage,
+    ) {
+        val user = connection.user
+        val data = message.params.firstOrNull() ?: ""
+        
+        when (data) {
+            "PLAIN" -> {
+                // Acknowledge PLAIN mechanism
+                sendMessage(
+                    connection,
+                    IRCMessage(command = "AUTHENTICATE", params = listOf("+"))
+                )
+            }
+            "+" -> {
+                // Empty response, abort
+                sendMessage(
+                    connection,
+                    IRCMessageBuilder.numericError(
+                        serverName,
+                        user.nickname ?: "*",
+                        IRCReply.RPL_SASLABORTED,
+                        "SASL authentication aborted",
+                    )
+                )
+                saslBuffer.remove(connection)
+            }
+            "*" -> {
+                // Abort authentication
+                sendMessage(
+                    connection,
+                    IRCMessageBuilder.numericError(
+                        serverName,
+                        user.nickname ?: "*",
+                        IRCReply.RPL_SASLABORTED,
+                        "SASL authentication aborted",
+                    )
+                )
+                saslBuffer.remove(connection)
+            }
+            else -> {
+                // Base64 encoded authentication data
+                try {
+                    val buffer = saslBuffer.getOrDefault(connection, "") + data
+                    
+                    // If data is exactly 400 characters, more chunks are coming
+                    if (data.length == 400) {
+                        saslBuffer[connection] = buffer
+                        return
+                    }
+                    
+                    // Decode base64
+                    val decoded = java.util.Base64.getDecoder().decode(buffer)
+                    val parts = String(decoded).split('\u0000')
+                    
+                    if (parts.size == 3) {
+                        val authzid = parts[0]  // Can be empty
+                        val authcid = parts[1]  // Username
+                        val passwd = parts[2]   // Password
+                        
+                        // Authenticate using our service
+                        if (xyz.malefic.irc.server.auth.AuthenticationService.authenticate(authcid, passwd)) {
+                            user.authenticated = true
+                            user.accountName = authcid
+                            
+                            sendMessage(
+                                connection,
+                                IRCMessageBuilder.numericError(
+                                    serverName,
+                                    user.nickname ?: "*",
+                                    IRCReply.RPL_SASLSUCCESS,
+                                    "SASL authentication successful",
+                                )
+                            )
+                            
+                            // Send logged in notification
+                            sendMessage(
+                                connection,
+                                IRCMessageBuilder.numericError(
+                                    serverName,
+                                    user.nickname ?: "*",
+                                    IRCReply.RPL_LOGGEDIN,
+                                    "${user.fullMask()} $authcid :You are now logged in as $authcid",
+                                )
+                            )
+                        } else {
+                            sendMessage(
+                                connection,
+                                IRCMessageBuilder.numericError(
+                                    serverName,
+                                    user.nickname ?: "*",
+                                    IRCReply.RPL_SASLFAIL,
+                                    "SASL authentication failed",
+                                )
+                            )
+                        }
+                    } else {
+                        sendMessage(
+                            connection,
+                            IRCMessageBuilder.numericError(
+                                serverName,
+                                user.nickname ?: "*",
+                                IRCReply.RPL_SASLFAIL,
+                                "SASL authentication failed: invalid format",
+                            )
+                        )
+                    }
+                    
+                    saslBuffer.remove(connection)
+                } catch (e: Exception) {
+                    println("SASL authentication error: ${e.message}")
+                    sendMessage(
+                        connection,
+                        IRCMessageBuilder.numericError(
+                            serverName,
+                            user.nickname ?: "*",
+                            IRCReply.RPL_SASLFAIL,
+                            "SASL authentication failed: ${e.message}",
+                        )
+                    )
+                    saslBuffer.remove(connection)
                 }
             }
         }
@@ -230,6 +471,22 @@ class IRCServer(
 
     private suspend fun completeRegistration(connection: ClientConnection) {
         val user = connection.user
+        
+        // If a password was provided via PASS, try to authenticate
+        if (user.password != null && !user.authenticated) {
+            val username = user.username ?: user.nickname
+            if (username != null) {
+                try {
+                    if (xyz.malefic.irc.server.auth.AuthenticationService.authenticate(username, user.password!!)) {
+                        user.authenticated = true
+                        user.accountName = username
+                    }
+                } catch (e: Exception) {
+                    println("Authentication error for $username: ${e.message}")
+                }
+            }
+        }
+        
         user.registered = true
 
         val nick = user.nickname!!
@@ -237,6 +494,19 @@ class IRCServer(
         sendMessage(connection, IRCMessageBuilder.yourHost(serverName, nick, "1.0.0"))
         sendMessage(connection, IRCMessageBuilder.created(serverName, nick, "2026-02-04"))
         sendMessage(connection, IRCMessageBuilder.myInfo(serverName, nick, "1.0.0"))
+        
+        // If authenticated, send logged in message
+        if (user.authenticated && user.accountName != null) {
+            sendMessage(
+                connection,
+                IRCMessageBuilder.numericError(
+                    serverName,
+                    nick,
+                    IRCReply.RPL_LOGGEDIN,
+                    "${user.fullMask()} ${user.accountName} :You are now logged in as ${user.accountName}",
+                )
+            )
+        }
     }
 
     private suspend fun handleJoin(
@@ -335,6 +605,15 @@ class IRCServer(
 
             val privmsg = IRCMessageBuilder.privmsg(user.fullMask(), target, text)
             broadcastToChannel(channel, privmsg, except = user.nickname)
+            
+            // Log channel message to history
+            xyz.malefic.irc.server.history.MessageHistoryService.logMessage(
+                sender = user.nickname!!,
+                target = target,
+                message = text,
+                messageType = "PRIVMSG",
+                isChannelMessage = true
+            )
         } else {
             // Private message
             val targetConn = users[target]
@@ -353,6 +632,15 @@ class IRCServer(
 
             val privmsg = IRCMessageBuilder.privmsg(user.fullMask(), target, text)
             sendMessage(targetConn, privmsg)
+            
+            // Log private message to history
+            xyz.malefic.irc.server.history.MessageHistoryService.logMessage(
+                sender = user.nickname!!,
+                target = target,
+                message = text,
+                messageType = "PRIVMSG",
+                isChannelMessage = false
+            )
         }
     }
 

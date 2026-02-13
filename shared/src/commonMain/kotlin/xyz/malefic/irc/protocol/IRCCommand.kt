@@ -11,6 +11,8 @@ object IRCCommand {
     const val SERVER = "SERVER"
     const val OPER = "OPER"
     const val QUIT = "QUIT"
+    const val CAP = "CAP"
+    const val AUTHENTICATE = "AUTHENTICATE"
     
     // Channel Operations
     const val JOIN = "JOIN"

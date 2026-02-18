@@ -30,11 +30,18 @@ services:
     ports:
       - "6667:6667"
     environment:
+      # Database configuration
       - DB_HOST=postgres
       - DB_PORT=5432
       - DB_NAME=malefirc
       - DB_USER=malefirc
       - DB_PASSWORD=malefirc
+      # IRC Server configuration
+      - IRC_PORT=6667
+      - IRC_SERVER_NAME=malefirc.local
+      # IRC Operator credentials (CHANGE THESE IN PRODUCTION!)
+      - IRC_OPER_NAME=admin
+      - IRC_OPER_PASSWORD=adminpass
     depends_on:
       postgres:
         condition: service_healthy

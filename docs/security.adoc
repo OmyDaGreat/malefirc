@@ -4,7 +4,7 @@
 :icons: font
 :source-highlighter: rouge
 
-xref:index.adoc[← Back to Index]
+xref:README.adoc[← Back to Index]
 
 This guide covers environment variable configuration, operator credentials, user privacy settings, database security, and production hardening.
 

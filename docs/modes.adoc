@@ -4,7 +4,7 @@
 :icons: font
 :source-highlighter: rouge
 
-xref:index.adoc[← Back to Index]
+xref:README.adoc[← Back to Index]
 
 Malefirc implements RFC 1459/2812 user modes, channel modes, and operator commands.
 The first user to join a channel automatically becomes its operator.

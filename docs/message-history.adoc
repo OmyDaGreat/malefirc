@@ -4,7 +4,7 @@
 :icons: font
 :source-highlighter: rouge
 
-xref:index.adoc[← Back to Index]
+xref:README.adoc[← Back to Index]
 
 All `PRIVMSG` commands are automatically persisted to PostgreSQL.
 The message history system provides retrieval, pagination, full-text search, and privacy controls.

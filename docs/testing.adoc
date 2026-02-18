@@ -4,7 +4,7 @@
 :icons: font
 :source-highlighter: rouge
 
-xref:index.adoc[← Back to Index]
+xref:README.adoc[← Back to Index]
 
 Manual testing procedures for the Malefirc IRC server, client, and protocol compliance.
 No automated test suite exists yet — all verification is done interactively.

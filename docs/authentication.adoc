@@ -4,7 +4,7 @@
 :icons: font
 :source-highlighter: rouge
 
-xref:index.adoc[← Back to Index]
+xref:README.adoc[← Back to Index]
 
 Malefirc supports two authentication mechanisms: the traditional IRC `PASS` command and the modern `SASL PLAIN` protocol.
 Both validate against accounts stored in PostgreSQL with BCrypt-hashed passwords.

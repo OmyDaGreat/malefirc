@@ -1,0 +1,144 @@
+= Malefirc Documentation
+:toc: left
+:toc-title: Contents
+:icons: font
+:source-highlighter: rouge
+
+A complete IRC implementation in Kotlin — standards-compliant server, terminal client, and Kobweb web client.
+Compatible with irssi, HexChat, WeeChat, and any RFC 1459/2812 client.
+
+== Guides
+
+[cols="1,3",options="header"]
+|===
+| Document | Description
+
+| xref:authentication.adoc[Authentication]
+| User accounts, SASL PLAIN, PASS command, database schema, and client configuration.
+
+| xref:docker.adoc[Docker]
+| Running the full stack with Docker Compose — services, ports, configuration, backup, and troubleshooting.
+
+| xref:modes.adoc[Modes & Channel Management]
+| User modes, channel modes, KICK, INVITE, BAN, WHOIS, AWAY, and OPER commands.
+
+| xref:message-history.adoc[Message History]
+| Persistent message storage, retrieval API, full-text search, privacy controls, and cleanup.
+
+| xref:security.adoc[Security]
+| Environment variable configuration, operator credentials, user privacy settings, and hardening guide.
+
+| xref:testing.adoc[Testing]
+| Manual testing procedures for the server, client, and protocol compliance.
+|===
+
+== Quick Reference
+
+=== Service Ports
+
+[cols="1,1,2",options="header"]
+|===
+| Service | Port | Notes
+
+| IRC Server
+| 6667
+| Connect with any IRC client
+
+| Web Client
+| 8080
+| Kobweb interface via browser
+
+| PostgreSQL
+| 5432
+| Internal — do not expose publicly
+|===
+
+=== Key Environment Variables
+
+[cols="2,1,2",options="header"]
+|===
+| Variable | Default | Description
+
+| `IRC_PORT`
+| `6667`
+| IRC server listen port
+
+| `IRC_SERVER_NAME`
+| `malefirc.local`
+| Server hostname shown to clients
+
+| `IRC_OPER_NAME`
+| `admin`
+| Operator username (**change in production**)
+
+| `IRC_OPER_PASSWORD`
+| `adminpass`
+| Operator password (**change in production**)
+
+| `DB_HOST`
+| `localhost`
+| PostgreSQL host
+
+| `DB_PORT`
+| `5432`
+| PostgreSQL port
+
+| `DB_NAME`
+| `malefirc`
+| Database name
+
+| `DB_USER`
+| `malefirc`
+| Database user
+
+| `DB_PASSWORD`
+| `malefirc`
+| Database password (**change in production**)
+|===
+
+WARNING: Change all default credentials before deploying to production.
+See xref:security.adoc[Security] for a full hardening checklist.
+
+=== Run Commands
+
+[source,bash]
+----
+# Docker (recommended)
+docker-compose up -d
+
+# Server only
+./gradlew :server:run
+
+# Terminal client
+./gradlew :client:run
+
+# Full build
+./gradlew build
+----
+
+== Implemented IRC Commands
+
+[cols="1,3",options="header"]
+|===
+| Category | Commands
+
+| Connection
+| `PASS`, `NICK`, `USER`, `QUIT`, `CAP`, `AUTHENTICATE`
+
+| Channels
+| `JOIN`, `PART`, `TOPIC`, `NAMES`, `LIST`, `INVITE`, `KICK`
+
+| Messaging
+| `PRIVMSG`, `NOTICE`
+
+| Modes
+| `MODE` (user and channel modes)
+
+| Queries
+| `WHO`, `WHOIS`, `PING`, `PONG`, `AWAY`, `OPER`
+|===
+
+== External References
+
+* https://tools.ietf.org/html/rfc1459[RFC 1459 — Internet Relay Chat Protocol]
+* https://tools.ietf.org/html/rfc2812[RFC 2812 — IRC: Client Protocol]

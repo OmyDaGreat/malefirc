@@ -1,0 +1,262 @@
+= Docker Setup
+:toc: left
+:toc-title: Contents
+:icons: font
+:source-highlighter: rouge
+
+xref:index.adoc[← Back to Index]
+
+Docker Compose is the recommended way to run the full Malefirc stack.
+It starts PostgreSQL, the IRC server, and the web client as a coordinated set of services.
+
+== Services
+
+[cols="1,1,3",options="header"]
+|===
+| Service | Port | Description
+
+| PostgreSQL
+| 5432
+| User accounts and message history
+
+| IRC Server
+| 6667
+| RFC-compliant IRC server
+
+| Web Client
+| 8080
+| Kobweb-based browser interface (served via Nginx)
+|===
+
+Services communicate over an internal bridge network (`malefirc-network`).
+Only the ports listed above are exposed to the host.
+
+== Quick Start
+
+.Prerequisites
+* Docker Engine 20.10+
+* Docker Compose 2.0+
+
+[source,bash]
+----
+# Build and start all services
+docker-compose up -d
+
+# Follow logs for all services
+docker-compose logs -f
+
+# Follow logs for a specific service
+docker-compose logs -f irc-server
+
+# Stop all services
+docker-compose down
+
+# Stop and remove volumes (WARNING: deletes database data)
+docker-compose down -v
+----
+
+== Connecting
+
+=== Standard IRC Clients
+
+[source,bash]
+----
+# irssi
+irssi
+/connect localhost 6667
+/nick YourNick
+/join #general
+
+# WeeChat
+weechat
+/server add malefirc localhost/6667
+/connect malefirc
+/join #general
+----
+
+HexChat: add `localhost/6667` as a new server.
+
+=== Web Client
+
+Navigate to http://localhost:8080 in your browser.
+
+== Configuration
+
+=== Environment Variables
+
+Edit the `irc-server` environment section in `docker-compose.yml`:
+
+[source,yaml]
+----
+irc-server:
+  environment:
+    # Database
+    - DB_HOST=postgres
+    - DB_PORT=5432
+    - DB_NAME=malefirc
+    - DB_USER=malefirc
+    - DB_PASSWORD=malefirc
+    # IRC Server
+    - IRC_PORT=6667
+    - IRC_SERVER_NAME=malefirc.local
+    # Operator credentials — CHANGE IN PRODUCTION
+    - IRC_OPER_NAME=admin
+    - IRC_OPER_PASSWORD=adminpass
+----
+
+WARNING: Change `IRC_OPER_NAME`, `IRC_OPER_PASSWORD`, and `DB_PASSWORD` before any public deployment.
+
+[#_changing_ports]
+=== Changing Ports
+
+Modify the `ports` mapping in `docker-compose.yml` (format: `host:container`):
+
+[source,yaml]
+----
+ports:
+  - "16667:6667"  # IRC on host port 16667
+  - "18080:80"    # Web client on host port 18080
+----
+
+== Development Workflow
+
+=== Rebuilding After Code Changes
+
+[source,bash]
+----
+# Rebuild a single service
+docker-compose build irc-server
+
+# Rebuild and restart one service
+docker-compose up -d --build irc-server
+
+# Full rebuild from scratch
+docker-compose build --no-cache
+docker-compose up -d
+----
+
+=== Accessing Running Containers
+
+[source,bash]
+----
+# IRC server shell
+docker exec -it malefirc-server sh
+
+# PostgreSQL prompt
+docker exec -it malefirc-postgres psql -U malefirc -d malefirc
+
+# Web client shell
+docker exec -it malefirc-client sh
+----
+
+== Network Architecture
+
+[source]
+----
+┌─────────────┐     ┌─────────────┐
+│ Web Client  │────▶│ IRC Server  │
+│   :8080     │     │   :6667     │
+└─────────────┘     └──────┬──────┘
+                           │
+                           ▼
+                    ┌─────────────┐
+                    │  PostgreSQL │
+                    │   :5432     │
+                    └─────────────┘
+----
+
+All services share the `malefirc-network` bridge network.
+The IRC server waits for PostgreSQL's health check before starting.
+
+[#_backup_and_restore]
+== Backup and Restore
+
+=== Backup
+
+[source,bash]
+----
+# SQL dump
+docker-compose exec postgres pg_dump -U malefirc malefirc > backup.sql
+
+# Volume archive
+docker run --rm \
+  -v malefirc_postgres_data:/data \
+  -v $(pwd):/backup \
+  alpine tar czf /backup/postgres-backup.tar.gz /data
+----
+
+=== Restore
+
+[source,bash]
+----
+# From SQL dump
+docker-compose exec -T postgres psql -U malefirc malefirc < backup.sql
+
+# From volume archive
+docker run --rm \
+  -v malefirc_postgres_data:/data \
+  -v $(pwd):/backup \
+  alpine tar xzf /backup/postgres-backup.tar.gz -C /
+----
+
+== Troubleshooting
+
+=== Services Won't Start
+
+[source,bash]
+----
+docker-compose ps          # Check service status
+docker-compose logs        # View all logs
+docker-compose restart irc-server
+----
+
+=== Database Connection Issues
+
+[source,bash]
+----
+docker-compose exec postgres pg_isready -U malefirc
+docker-compose logs postgres
+----
+
+=== Port Conflicts
+
+Change the host-side port in `docker-compose.yml` — see <<_changing_ports>>.
+
+=== Environment Variables Not Applied
+
+[source,bash]
+----
+docker-compose down
+docker-compose up -d
+docker-compose exec irc-server env | grep IRC_
+----
+
+== Production Hardening
+
+. Change all default passwords in `docker-compose.yml`.
+. Use https://docs.docker.com/engine/swarm/secrets/[Docker Secrets] for sensitive values.
+. Enable SSL/TLS for IRC (port 6697) — planned for a future release.
+. Serve the web client over HTTPS (update the Nginx config).
+. Set up automated backups for the `postgres_data` volume.
+. Apply resource limits:
+
+[source,yaml]
+----
+services:
+  irc-server:
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+----
+
+[start=7]
+. Use override files for environment-specific settings:
+
+[source,bash]
+----
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+----
+
+See xref:security.adoc[Security] for the full production checklist.

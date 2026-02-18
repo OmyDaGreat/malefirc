@@ -1,0 +1,276 @@
+= Modes & Channel Management
+:toc: left
+:toc-title: Contents
+:icons: font
+:source-highlighter: rouge
+
+xref:index.adoc[← Back to Index]
+
+Malefirc implements RFC 1459/2812 user modes, channel modes, and operator commands.
+The first user to join a channel automatically becomes its operator.
+
+== User Modes
+
+User modes affect individual behaviour and visibility.
+Users can set their own modes, except `+o` (operator) which requires `OPER`.
+
+[cols="1,2,3",options="header"]
+|===
+| Mode | Name | Description
+
+| `i` | Invisible | Hidden from `WHO`/`NAMES` unless sharing a channel with the requester
+| `o` | Operator | Server operator status — granted via `OPER` command
+| `w` | Wallops | Receives server `WALLOPS` messages
+|===
+
+=== User Mode Commands
+
+[source,irc]
+----
+MODE alice           # Query your own modes
+MODE alice +i        # Set invisible
+MODE alice -i        # Remove invisible
+----
+
+== Channel Modes
+
+Only channel operators can change most channel modes.
+
+[cols="1,2,1,3",options="header"]
+|===
+| Mode | Name | Parameter | Description
+
+| `m` | Moderated | — | Only ops/voiced users can speak
+| `s` | Secret | — | Channel hidden from `LIST` unless you are a member
+| `i` | Invite-only | — | Must be invited before joining
+| `t` | Topic lock | — | Only operators can change the topic
+| `n` | No external | — | Only members can send messages to the channel
+| `l` | User limit | number | Maximum number of users allowed
+| `k` | Key | password | Password required to join
+| `o` | Operator | nickname | Grant/revoke channel operator status
+| `v` | Voice | nickname | Grant/revoke voice (can speak in `+m` channels)
+| `b` | Ban | mask | Ban a user mask from the channel
+|===
+
+=== Channel Mode Commands
+
+[source,irc]
+----
+MODE #channel                       # Query current modes
+MODE #channel +m                    # Set moderated
+MODE #channel +k secretpass         # Set password
+MODE #channel +l 50                 # Set user limit of 50
+MODE #channel +o alice              # Make alice an operator
+MODE #channel +v bob                # Give bob voice
+MODE #channel +b *!*@*.example.com  # Ban all users from example.com
+MODE #channel -m +k pass123         # Combine: remove moderated, add key
+MODE #channel +mti                  # Set moderated, topic-locked, invite-only
+MODE #channel +ov alice bob         # Op alice and voice bob simultaneously
+MODE #channel +b                    # List all active bans
+----
+
+== Join Checks
+
+When a user sends `JOIN`, the server performs these checks in order:
+
+. *Ban check* — rejects with `474 ERR_BANNEDFROMCHAN` if the user matches a ban mask.
+. *Invite-only* (`+i`) — rejects with `473 ERR_INVITEONLYCHAN` unless invited.
+. *Channel key* (`+k`) — rejects with `475 ERR_BADCHANNELKEY` if the wrong or no key is provided.
+. *User limit* (`+l`) — rejects with `471 ERR_CHANNELISFULL` if the channel is at capacity.
+
+[source,irc]
+----
+JOIN #secret wrongpass    # Fails — ERR_BADCHANNELKEY
+JOIN #secret rightpass    # Succeeds
+
+JOIN #one,#two,#three pass1,,pass3   # Join multiple channels
+----
+
+== PRIVMSG Checks
+
+. *No external messages* (`+n`) — rejects if the sender is not a channel member.
+. *Moderated* (`+m`) — rejects if the sender has neither operator nor voice status.
+
+== TOPIC Checks
+
+. *Topic lock* (`+t`) — rejects if the sender is not a channel operator.
+
+== NAMES Display
+
+[cols="1,3",options="header"]
+|===
+| Prefix | Meaning
+
+| `@nickname` | Channel operator
+| `+nickname` | Voiced user
+| `nickname` | Regular user
+|===
+
+== Channel Operator Commands
+
+=== KICK — Remove a User
+
+[source,irc]
+----
+KICK #lobby spammer Spamming
+KICK #dev alice Please rejoin with an updated client
+----
+
+Requires channel operator status. The target must be in the channel.
+
+=== INVITE — Invite a User
+
+[source,irc]
+----
+INVITE bob #private
+----
+
+* You must be in the channel.
+* You must be an operator if the channel is `+i`.
+* Invited users bypass the invite-only restriction; the invitation is consumed on first `JOIN`.
+* Users cannot invite themselves.
+
+=== BAN Management
+
+[source,irc]
+----
+# Common ban patterns
+MODE #channel +b alice!*@*           # Ban by nickname
+MODE #channel +b *!*@evil.com        # Ban by domain
+MODE #channel +b *!baduser@*         # Ban by username
+MODE #channel +b *!*@192.168.1.*     # Ban IP range
+
+# Remove a ban
+MODE #channel -b alice!*@*
+
+# List all bans
+MODE #channel +b
+----
+
+Ban masks use wildcard matching: `*` matches any number of characters, `?` matches exactly one.
+Format: `nickname!username@hostname`.
+
+[#_server_operator_commands]
+== Server Operator Commands
+
+=== OPER — Become Server Operator
+
+[source,irc]
+----
+OPER admin adminpass
+----
+
+Credentials are set via environment variables (`IRC_OPER_NAME`, `IRC_OPER_PASSWORD`).
+See xref:security.adoc[Security] for configuration details.
+
+Server operators can grant channel operator status, manage server-wide settings, and override channel restrictions.
+
+WARNING: The defaults (`admin`/`adminpass`) are for development only.
+Always change these before deploying.
+
+== User Query Commands
+
+=== WHOIS — Get User Information
+
+[source,irc]
+----
+WHOIS alice
+----
+
+Response includes: username, hostname, real name, channel list (with status prefixes), server info, operator status, account name (if authenticated), and away message.
+
+=== AWAY — Set or Clear Away Status
+
+[source,irc]
+----
+AWAY :Gone for lunch, back in 30 minutes   # Set away
+AWAY                                        # Clear away
+----
+
+Away messages appear in `WHOIS` responses.
+
+== Scenarios
+
+=== Moderated Channel
+
+[source,irc]
+----
+JOIN #moderated
+MODE #moderated +m        # Enable moderated mode
+# bob joins but cannot speak (not voiced)
+MODE #moderated +v bob    # Give bob voice — he can now speak
+----
+
+=== Private Channel
+
+[source,irc]
+----
+JOIN #private
+MODE #private +istk secretpass   # invite-only, secret, topic-lock, key
+# Channel hidden from /LIST
+# Users must be invited or know the key
+----
+
+=== Managed Community Channel
+
+[source,irc]
+----
+JOIN #community
+MODE #community +nt                        # No external messages, topic lock
+MODE #community +l 100                     # Limit to 100 users
+MODE #community +ooo alice bob charlie     # Grant three operators
+KICK #community spammer Repeated warnings
+MODE #community +b *!*@spammer.evil.com
+----
+
+== Error Codes Reference
+
+[cols="1,2,3",options="header"]
+|===
+| Code | Name | Meaning
+
+| 441 | ERR_USERNOTINCHANNEL | Target not in channel (KICK)
+| 442 | ERR_NOTONCHANNEL | You are not on that channel
+| 443 | ERR_USERONCHANNEL | User already in channel (INVITE)
+| 471 | ERR_CHANNELISFULL | Channel at user limit (`+l`)
+| 472 | ERR_UNKNOWNMODE | Unknown mode flag
+| 473 | ERR_INVITEONLYCHAN | Channel is invite-only (`+i`)
+| 474 | ERR_BANNEDFROMCHAN | You are banned (`+b`)
+| 475 | ERR_BADCHANNELKEY | Wrong channel key (`+k`)
+| 481 | ERR_NOPRIVILEGES | No server operator privileges
+| 482 | ERR_CHANOPRIVSNEEDED | Not a channel operator
+| 501 | ERR_UMODEUNKNOWNFLAG | Unknown user mode flag
+| 502 | ERR_USERSDONTMATCH | Cannot set modes for other users
+|===
+
+== Client Shortcuts
+
+Most clients expose shortcuts for common mode commands:
+
+[source]
+----
+/op alice      → MODE #channel +o alice
+/deop alice    → MODE #channel -o alice
+/voice bob     → MODE #channel +v bob
+/devoice bob   → MODE #channel -v bob
+/kick alice    → KICK #channel alice
+/invite bob    → INVITE bob #channel
+----
+
+Compatible with irssi, HexChat, WeeChat, and mIRC.
+
+== Implementation Notes
+
+* Modes persist for the lifetime of the channel.
+* Channels are destroyed when the last user leaves; all modes reset on recreation.
+* Persistent channels with stored modes and ops are planned for a future release.
+
+== Planned Features
+
+* Persistent channels saved to the database
+* Channel founder/owner roles
+* Timed bans with automatic expiry
+* Ban exception lists
+* Quiet mode (silence without ban)
+* ChanServ channel registration service
+* SSL/TLS user mode (`+Z`)

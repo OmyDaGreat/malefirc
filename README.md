@@ -70,7 +70,7 @@ irc-server:
     - IRC_OPER_PASSWORD=your_secure_password
 ```
 
-See [DOCKER.md](docs/DOCKER.md) for complete Docker documentation and [SECURITY.md](docs/SECURITY.md) for security best practices.
+See [Docker](docs/docker.adoc) for complete Docker documentation and [Security](docs/security.adoc) for security best practices.
 
 ### Running Locally
 
@@ -180,7 +180,7 @@ weechat
 - 401-502: Error codes
 - 900-907: SASL authentication replies
 
-See [AUTHENTICATION.md](docs/AUTHENTICATION.md) for authentication details.
+See [Authentication](docs/authentication.adoc) for authentication details.
 
 ## Development
 
@@ -235,7 +235,7 @@ Future enhancements (see implementation plan for details):
 - [x] Message search functionality
 - [x] Automatic archival/cleanup system
 
-See [MESSAGE_HISTORY.md](docs/MESSAGE_HISTORY.md) for complete documentation.
+See [Message History](docs/message-history.adoc) for complete documentation.
 
 ### Phase 3: User & Channel Modes ✅ COMPLETED
 - [x] User modes (invisible, operator, away, etc.)
@@ -251,7 +251,7 @@ See [MESSAGE_HISTORY.md](docs/MESSAGE_HISTORY.md) for complete documentation.
 - [x] OPER command for server operators
 - [x] AWAY command implementation
 
-See [MODES.md](docs/MODES.md) for complete documentation.
+See [Modes](docs/modes.adoc) for complete documentation.
 
 ### Phase 4.5: Security Enhancements ✅ COMPLETED
 - [x] Environment-based OPER credentials (no hardcoded passwords)
@@ -260,7 +260,7 @@ See [MODES.md](docs/MODES.md) for complete documentation.
 - [x] Access control for private message history
 - [x] Privacy-respecting search and history retrieval
 
-See [SECURITY.md](docs/SECURITY.md) for security configuration and best practices.
+See [Security](docs/security.adoc) for security configuration and best practices.
 
 ### Phase 5: SSL/TLS Support
 - [ ] SSL/TLS encryption

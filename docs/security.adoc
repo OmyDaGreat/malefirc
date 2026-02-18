@@ -1,0 +1,281 @@
+= Security
+:toc: left
+:toc-title: Contents
+:icons: font
+:source-highlighter: rouge
+
+xref:index.adoc[← Back to Index]
+
+This guide covers environment variable configuration, operator credentials, user privacy settings, database security, and production hardening.
+
+== Quick Reference
+
+=== Changing Operator Credentials
+
+.Standalone
+[source,bash]
+----
+export IRC_OPER_NAME=myadmin
+export IRC_OPER_PASSWORD=MySecureP@ssw0rd123!
+./gradlew :server:run
+----
+
+.Docker
+[source,yaml]
+----
+# docker-compose.yml
+irc-server:
+  environment:
+    - IRC_OPER_NAME=your_secure_username
+    - IRC_OPER_PASSWORD=your_very_secure_password
+----
+
+[source,bash]
+----
+docker-compose up -d --force-recreate irc-server
+----
+
+=== Production Checklist
+
+* [ ] Changed `IRC_OPER_NAME` from default (`admin`)
+* [ ] Changed `IRC_OPER_PASSWORD` — 16+ chars, mixed case, symbols
+* [ ] Changed `DB_PASSWORD`
+* [ ] Verified new credentials with `OPER` command
+* [ ] Configured privacy settings for users if required
+* [ ] Set up backup strategy
+* [ ] Enabled monitoring and log review
+* [ ] Considered SSL/TLS (see <<_planned_features>>)
+
+=== Default Settings
+
+[cols="2,1,2",options="header"]
+|===
+| Setting | Default | Notes
+
+| `IRC_OPER_NAME` | `admin` | **Change in production**
+| `IRC_OPER_PASSWORD` | `adminpass` | **Change in production**
+| `IRC_PORT` | `6667` | —
+| `IRC_SERVER_NAME` | `malefirc.local` | —
+| `DB_PASSWORD` | `malefirc` | **Change in production**
+| `allow_message_logging` | `true` | Per-user privacy control
+| `allow_history_access` | `true` | Per-user privacy control
+|===
+
+WARNING: The defaults exist for local development only.
+Deploying with them leaves your server vulnerable.
+
+== Environment Variables
+
+=== IRC Server Configuration
+
+[cols="2,1,3",options="header"]
+|===
+| Variable | Default | Description
+
+| `IRC_PORT` | `6667` | TCP port the server listens on
+| `IRC_SERVER_NAME` | `malefirc.local` | Hostname shown in server messages
+| `IRC_OPER_NAME` | `admin` | OPER command username
+| `IRC_OPER_PASSWORD` | `adminpass` | OPER command password
+|===
+
+=== Database Configuration
+
+[cols="2,1,3",options="header"]
+|===
+| Variable | Default | Description
+
+| `DB_HOST` | `localhost` | PostgreSQL host
+| `DB_PORT` | `5432` | PostgreSQL port
+| `DB_NAME` | `malefirc` | Database name
+| `DB_USER` | `malefirc` | Database username
+| `DB_PASSWORD` | `malefirc` | Database password
+|===
+
+=== Verifying Configuration
+
+[source,bash]
+----
+# Docker
+docker-compose exec irc-server env | grep -E 'IRC_|DB_'
+
+# Expected output
+IRC_PORT=6667
+IRC_SERVER_NAME=malefirc.local
+IRC_OPER_NAME=<your-custom-value>
+IRC_OPER_PASSWORD=<your-custom-value>
+----
+
+== OPER Command
+
+The `OPER` command grants server operator privileges:
+
+[source,irc]
+----
+OPER username password
+----
+
+.Success
+[source]
+----
+:malefirc.local 381 yournick :You are now an IRC operator
+----
+
+.Failure
+[source]
+----
+:malefirc.local 464 yournick :Password incorrect
+----
+
+Server operators can grant channel operator status, manage server-wide settings, and override channel restrictions.
+See xref:modes.adoc#_server_operator_commands[Modes → Server Operator Commands] for details.
+
+[[privacy]]
+== User Privacy Settings
+
+Two flags in the `account` table control how a user's messages are handled.
+
+[cols="2,1,3",options="header"]
+|===
+| Flag | Default | Behaviour when `false`
+
+| `allow_message_logging`
+| `true`
+| Messages are *not written* to the database.
+  Real-time delivery is unaffected.
+
+| `allow_history_access`
+| `true`
+| Messages are *filtered out* of all history API responses.
+  Messages may still exist in the database if logging was enabled.
+|===
+
+=== Updating Privacy Settings
+
+.Direct SQL
+[source,sql]
+----
+UPDATE account SET allow_message_logging = false WHERE username = 'privacy_user';
+UPDATE account SET allow_history_access  = false WHERE username = 'privacy_user';
+
+-- Verify
+SELECT username, allow_message_logging, allow_history_access FROM account;
+----
+
+.Kotlin
+[source,kotlin]
+----
+transaction {
+    AccountEntity.find { AccountTable.username eq "privacy_user" }
+        .firstOrNull()
+        ?.apply {
+            allowMessageLogging = false
+            allowHistoryAccess  = false
+        }
+}
+----
+
+=== GDPR Considerations
+
+The privacy flags support partial GDPR compliance:
+
+* `allow_message_logging = false` — Right to Object (no new data collected)
+* `allow_history_access = false` — partial Right to Erasure (data hidden from API)
+* Full erasure requires deleting rows from `message_history` directly
+
+NOTE: Full GDPR compliance also requires data export tooling and a documented deletion process.
+
+== Password Security
+
+User account passwords are hashed with BCrypt (work factor 10):
+
+* Per-password salts prevent rainbow table attacks.
+* Passwords are never stored or logged in plaintext.
+* The `AUTHENTICATE PLAIN` exchange transmits credentials over the IRC connection — use SSL/TLS in production.
+
+=== Password Guidelines for Operators
+
+* Minimum 16 characters
+* Mix of uppercase, lowercase, digits, and symbols
+* No dictionary words or predictable patterns
+
+== Database Security
+
+. Use strong, unique database passwords (`DB_PASSWORD`).
+. Restrict PostgreSQL access to application servers only (firewall rules / Docker networking).
+. Use SSL/TLS for database connections in production.
+. Back up regularly and test restores.
+. Monitor for unusual query patterns.
+
+See xref:docker.adoc[Docker] for backup procedures.
+
+== Message History API
+
+All message history endpoints require authentication.
+See xref:message-history.adoc#_access_control_rules[Message History → Access Control Rules] for the full policy.
+
+== Best Practices
+
+=== For Operators
+
+* Change all default credentials on first deployment.
+* Grant operator status only to trusted administrators.
+* Review logs for `KICK`, `BAN`, and `OPER` actions.
+
+=== For Users
+
+* Review `allow_message_logging` and `allow_history_access` if privacy matters.
+* Use a strong, unique IRC account password.
+* Be aware that messages are transmitted in plaintext until SSL/TLS is added.
+
+=== For Administrators
+
+* Run the IRC server in a container or sandboxed environment.
+* Apply OS and package updates promptly.
+* Implement rate limiting to prevent brute-force attacks (see <<_planned_features>>).
+* Maintain encrypted, off-site backups.
+* Monitor resource usage for DoS indicators.
+
+== Troubleshooting
+
+=== OPER Command Not Working
+
+. Confirm the environment variables are set and the server has been restarted.
+. For Docker, verify with: `docker-compose exec irc-server env | grep IRC_OPER`
+. Try the default credentials (`admin`/`adminpass`) to rule out a configuration issue.
+
+=== Messages Still Being Logged for a User
+
+. Confirm `allow_message_logging = false` in the database.
+. Ensure the user is authenticated — unauthenticated sessions bypass account privacy settings.
+. Restart the server if the schema was modified while it was running.
+
+=== API Authentication Errors
+
+. Confirm `requestingUser` is provided and matches an authenticated user.
+. Check the error field in the JSON response body.
+. Review xref:message-history.adoc[Message History] for the correct method signatures.
+
+== Reporting Security Issues
+
+. *Do not* open a public issue.
+. Contact the maintainers privately with a description of the vulnerability.
+. Allow reasonable time for a fix before public disclosure.
+
+[#_planned_features]
+== Planned Features
+
+* SSL/TLS for IRC connections (port 6697, STARTTLS)
+* SASL EXTERNAL (certificate-based authentication)
+* Rate limiting per user and per IP
+* Automated IP ban system
+* Two-factor authentication (TOTP/U2F)
+* Audit logging for all operator actions
+* Configurable password strength policies
+* Session tokens with expiry
+* GDPR data export and comprehensive deletion tools
+
+== References
+
+* https://tools.ietf.org/html/rfc1459[RFC 1459 — Internet Relay Chat Protocol]
+* https://owasp.org/www-project-top-ten/[OWASP Top 10]
+* https://pages.nist.gov/800-63-3/[NIST SP 800-63-3 Digital Identity Guidelines]

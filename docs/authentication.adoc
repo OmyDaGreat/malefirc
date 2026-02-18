@@ -1,0 +1,157 @@
+= Authentication
+:toc: left
+:toc-title: Contents
+:icons: font
+:source-highlighter: rouge
+
+xref:index.adoc[← Back to Index]
+
+Malefirc supports two authentication mechanisms: the traditional IRC `PASS` command and the modern `SASL PLAIN` protocol.
+Both validate against accounts stored in PostgreSQL with BCrypt-hashed passwords.
+
+== Authentication Methods
+
+=== PASS Command (Traditional)
+
+Send `PASS` before `NICK` and `USER`.
+When an account with a matching username and password exists, the user is automatically authenticated on registration.
+
+[source,irc]
+----
+PASS mypassword
+NICK myusername
+USER myusername 0 * :Real Name
+----
+
+=== SASL PLAIN (Recommended)
+
+Preferred by modern clients.
+Credentials are Base64-encoded in the format `\0username\0password`.
+
+[source,irc]
+----
+CAP LS 302
+CAP REQ :sasl
+AUTHENTICATE PLAIN
+AUTHENTICATE <base64-encoded-credentials>
+CAP END
+NICK myusername
+USER myusername 0 * :Real Name
+----
+
+.Encoding credentials in Python
+[source,python]
+----
+import base64
+credentials = f"\0{username}\0{password}"
+encoded = base64.b64encode(credentials.encode()).decode()
+----
+
+.Encoding credentials in Kotlin w/ Ktor functions
+[source,kotlin]
+----
+val credentials = "\u0000$username\u0000$password"
+val encoded = credentials.encodeToByteArray().encodeBase64()
+----
+
+== Numeric Replies
+
+[cols="1,2,3",options="header"]
+|===
+| Code | Name | Meaning
+
+| 900 | RPL_LOGGEDIN | Authentication successful
+| 901 | RPL_LOGGEDOUT | Logged out
+| 903 | RPL_SASLSUCCESS | SASL exchange complete
+| 904 | RPL_SASLFAIL | SASL authentication failed
+| 905 | RPL_SASLTOOLONG | SASL message too long
+| 906 | RPL_SASLABORTED | SASL aborted by client
+| 907 | RPL_SASLALREADY | Already authenticated
+|===
+
+== Database Schema
+
+User accounts are stored in the `account` table in PostgreSQL.
+
+[cols="1,1,3",options="header"]
+|===
+| Column | Type | Description
+
+| `username` | VARCHAR(50) | Unique username
+| `password` | VARCHAR(60) | BCrypt-hashed password
+| `email` | VARCHAR(255) | Optional email address
+| `created_at` | BIGINT | Account creation timestamp (Unix ms)
+| `last_login` | BIGINT | Last successful login timestamp
+| `is_verified` | BOOLEAN | Email verification flag
+| `allow_message_logging` | BOOLEAN | Whether to log this user's messages (default: true)
+| `allow_history_access` | BOOLEAN | Whether history API returns this user's messages (default: true)
+|===
+
+NOTE: The `allow_message_logging` and `allow_history_access` columns are privacy controls.
+See xref:security.adoc#privacy[Security → Privacy Settings] for details.
+
+== Account Registration
+
+Accounts must be created out-of-band — there is no in-protocol registration command yet.
+
+.Via application code
+[source,kotlin]
+----
+AuthenticationService.registerAccount(
+    username = "myuser",
+    password = "mypassword",
+    email = "user@example.com" // optional
+)
+----
+
+.Via psql directly
+[source,sql]
+----
+-- Connect to the database
+psql -h localhost -p 5432 -U malefirc -d malefirc
+
+-- Check existing accounts
+SELECT username, created_at, is_verified FROM account;
+----
+
+== Client Configuration
+
+=== WeeChat (SASL)
+
+[source]
+----
+/server add malefirc localhost/6667
+/set irc.server.malefirc.sasl_mechanism plain
+/set irc.server.malefirc.sasl_username myusername
+/set irc.server.malefirc.sasl_password mypassword
+/connect malefirc
+----
+
+=== irssi (PASS)
+
+[source]
+----
+/connect localhost 6667 mypassword myusername
+----
+
+=== HexChat
+
+. Open *Edit → Network List* and add `localhost/6667`.
+. Set *Login method* to **SASL (username + password)**.
+. Enter your username and password.
+. Alternatively, use the *Server Password* field for the `PASS` command.
+
+== Security Properties
+
+* Passwords hashed with BCrypt (work factor 10) — never stored in plaintext.
+* Authentication is optional — the server operates without a database.
+* If the database is unreachable, the server starts without authentication support.
+
+== Planned Features
+
+* In-protocol account registration (`/msg NickServ REGISTER`)
+* Email verification
+* Password reset
+* Multiple nicknames per account
+* Rate limiting on failed authentication attempts
+* Two-factor authentication (TOTP)

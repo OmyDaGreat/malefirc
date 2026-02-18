@@ -235,11 +235,12 @@ val encoded = credentials.encodeToByteArray().encodeBase64()
 
 ## Documentation References
 
-- **docs/SECURITY.md** - Security features, environment variables, privacy settings
-- **docs/MODES.md** - User/channel modes, operator commands, mode enforcement
-- **docs/AUTHENTICATION.md** - Auth mechanisms, SASL flow, database schema
-- **docs/MESSAGE_HISTORY.md** - Message persistence API, search, cleanup
-- **docs/DOCKER.md** - Container setup, service configuration, troubleshooting
-- **docs/TESTING.md** - Manual testing procedures with multiple clients
+- **docs/security.adoc** - Security features, environment variables, privacy settings
+- **docs/modes.adoc** - User/channel modes, operator commands, mode enforcement
+- **docs/authentication.adoc** - Auth mechanisms, SASL flow, database schema
+- **docs/message-history.adoc** - Message persistence API, search, cleanup
+- **docs/docker.adoc** - Container setup, service configuration, troubleshooting
+- **docs/testing.adoc** - Manual testing procedures with multiple clients
+- **docs/index.adoc** - Documentation index and navigation hub
 - **RFC 1459** - Original IRC protocol specification
 - **RFC 2812** - Updated IRC protocol specification

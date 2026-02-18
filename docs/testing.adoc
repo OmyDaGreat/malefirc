@@ -1,0 +1,262 @@
+= Testing Guide
+:toc: left
+:toc-title: Contents
+:icons: font
+:source-highlighter: rouge
+
+xref:index.adoc[← Back to Index]
+
+Manual testing procedures for the Malefirc IRC server, client, and protocol compliance.
+No automated test suite exists yet — all verification is done interactively.
+
+== Basic Multi-Client Test
+
+=== Step 1 — Start the IRC Server
+
+[source,bash]
+----
+./gradlew :server:run
+----
+
+Wait for the log line: `IRC Server started on port 6667`
+
+=== Step 2 — Connect First Client (alice)
+
+[source,bash]
+----
+# In a second terminal
+./gradlew :client:run
+----
+
+When prompted:
+
+* Server: `localhost`
+* Port: `6667`
+* Nickname: `alice`
+* Username: `alice`
+
+Then join a channel:
+
+[source]
+----
+/join #test
+----
+
+=== Step 3 — Connect Second Client (bob)
+
+[source,bash]
+----
+# In a third terminal
+./gradlew :client:run
+----
+
+* Nickname: `bob`
+* Username: `bob`
+
+[source]
+----
+/join #test
+----
+
+=== Step 4 — Test Messaging
+
+From alice's terminal:
+
+[source]
+----
+Hello Bob!
+----
+
+Bob should see: `[#test] <alice> Hello Bob!`
+
+From bob's terminal:
+
+[source]
+----
+Hi Alice!
+----
+
+Alice should see: `[#test] <bob> Hi Alice!`
+
+=== Step 5 — Test Commands
+
+[source]
+----
+/list             # List all channels
+/names            # List users in the current channel
+/topic Welcome!   # Set channel topic
+/msg alice Hello  # Send a private message
+----
+
+== Testing with Standard IRC Clients
+
+=== Raw Protocol via Telnet
+
+[source,bash]
+----
+telnet localhost 6667
+----
+
+Type commands directly:
+
+[source,irc]
+----
+NICK testuser
+USER testuser 0 * :Test User
+JOIN #test
+PRIVMSG #test :Hello from telnet!
+QUIT :Bye
+----
+
+=== irssi
+
+[source,bash]
+----
+irssi
+/connect localhost 6667
+/nick charlie
+/join #test
+Hello everyone!
+/quit
+----
+
+=== WeeChat
+
+[source]
+----
+/server add malefirc localhost/6667
+/connect malefirc
+/join #test
+----
+
+== Expected Behaviour
+
+=== JOIN
+* User receives welcome messages, topic (if set), and user list.
+* Other channel members see: `*** nickname has joined #channel`
+
+=== PRIVMSG
+* Channel message: all members see it except the sender.
+* Private message: only the recipient sees it.
+
+=== PART / QUIT
+* All channel members see: `*** nickname has left #channel (reason)`
+
+=== TOPIC
+* All channel members see the new topic.
+
+== Protocol Compliance Scenarios
+
+[cols="1,3",options="header"]
+|===
+| Scenario | What to Verify
+
+| Multiple channels
+| User can join several channels simultaneously; messages go to the correct channel; `PART` removes from one channel only.
+
+| PING/PONG
+| Server responds to `PING` with `PONG`; connection stays alive.
+
+| Unknown command
+| Returns `421 ERR_UNKNOWNCOMMAND`.
+
+| Missing parameters
+| Returns `461 ERR_NEEDMOREPARAMS`.
+
+| Non-existent nick
+| Returns `401 ERR_NOSUCHNICK`.
+
+| Case-insensitive commands
+| `NICK`, `nick`, and `NiCk` all work; channel names are case-insensitive; nicknames are case-sensitive.
+|===
+
+== Authentication Testing
+
+. Start Docker services:
++
+[source,bash]
+----
+docker-compose up -d
+----
+
+. Connect to PostgreSQL and inspect accounts:
++
+[source,bash]
+----
+docker exec -it malefirc-postgres psql -U malefirc -d malefirc
+----
++
+[source,sql]
+----
+SELECT username, is_verified, allow_message_logging FROM account;
+----
+
+. Connect a client using SASL PLAIN (WeeChat):
++
+[source]
+----
+/set irc.server.malefirc.sasl_mechanism plain
+/set irc.server.malefirc.sasl_username testuser
+/set irc.server.malefirc.sasl_password testpass
+/connect malefirc
+----
+
+. Look for `900 RPL_LOGGEDIN` and `903 RPL_SASLSUCCESS` in the server output.
+
+== Mode Testing
+
+See xref:modes.adoc[Modes & Channel Management] for the full command reference.
+Key scenarios to verify:
+
+[cols="1,3",options="header"]
+|===
+| Feature | Test Steps
+
+| User modes
+| Set/unset `+i`, verify visibility change in `WHO`.
+
+| First-user op
+| Create a fresh channel, confirm the joining user gets `@` prefix.
+
+| Moderated channel
+| Set `+m`, confirm non-voiced user cannot `PRIVMSG`; give voice, confirm they can.
+
+| Invite-only
+| Set `+i`, attempt join from uninvited user (expect `473`); `INVITE` them, confirm join succeeds.
+
+| Channel key
+| Set `+k pass`, attempt join without key (expect `475`); join with correct key.
+
+| User limit
+| Set `+l 2`, fill the channel, attempt third join (expect `471`).
+
+| KICK
+| Operator kicks a user; kicked user receives notification; user disappears from `NAMES`.
+
+| WHOIS
+| Verify response includes channels, account name (if authenticated), and away message.
+
+| AWAY
+| Set away message; check it appears in `WHOIS` from another client.
+
+| OPER
+| Use configured credentials; confirm `381` response and operator mode `+o`.
+|===
+
+== Common Issues
+
+=== Connection Refused
+* Confirm the server is running: check for the startup log line.
+* Confirm port 6667 is not in use by another process.
+
+=== Nickname Already in Use
+* Choose a different nickname, or wait a few seconds if a client just disconnected.
+
+=== Messages Not Appearing
+* Confirm you have joined the target channel (`/join #test`).
+* Confirm you are sending to the correct target.
+
+=== SASL Authentication Fails
+* Verify the account exists in the database.
+* Check the Base64 encoding of `\0username\0password`.
+* Review server logs for `904 RPL_SASLFAIL` details.

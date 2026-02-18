@@ -1,0 +1,312 @@
+= Message History & Persistence
+:toc: left
+:toc-title: Contents
+:icons: font
+:source-highlighter: rouge
+
+xref:index.adoc[← Back to Index]
+
+All `PRIVMSG` commands are automatically persisted to PostgreSQL.
+The message history system provides retrieval, pagination, full-text search, and privacy controls.
+
+== Features
+
+* Automatic logging of channel and private messages
+* Paginated history retrieval
+* Full-text message search
+* Private message history restricted to conversation participants
+* Per-user privacy controls (opt-out of logging and/or retrieval)
+* Message archival and cleanup
+
+== Database Schema
+
+=== message_history Table
+
+[cols="1,1,3",options="header"]
+|===
+| Column | Type | Description
+
+| `id` | BIGINT | Auto-increment primary key
+| `timestamp` | BIGINT | Unix timestamp in milliseconds
+| `sender` | VARCHAR(50) | Nickname of the message sender
+| `target` | VARCHAR(50) | Channel name or recipient nickname
+| `message` | TEXT | Message content
+| `message_type` | VARCHAR(20) | Type — typically `PRIVMSG`
+| `is_channel_message` | BOOLEAN | `true` for channel messages, `false` for private
+|===
+
+==== Indexes
+
+* `(target, timestamp)` — fast channel/user history lookups
+* `(sender, timestamp)` — fast sender-based lookups
+
+The table is created automatically on server startup via `DatabaseConfig.connect()`.
+
+== Service API
+
+All operations go through `MessageHistoryService`.
+Authentication is enforced by the caller; privacy settings are checked automatically.
+
+=== Get Channel History
+
+[source,kotlin]
+----
+val history = MessageHistoryService.getChannelHistory(
+    channelName = "#general",
+    limit = 100,
+    before = optionalTimestamp   // paginate backwards from this Unix ms timestamp
+)
+----
+
+=== Get Private Message History
+
+[source,kotlin]
+----
+val history = MessageHistoryService.getPrivateHistory(
+    user1 = "alice",
+    user2 = "bob",
+    limit = 100,
+    before = optionalTimestamp
+)
+----
+
+Returns messages in either direction between the two users.
+
+=== Search Messages
+
+[source,kotlin]
+----
+val results = MessageHistoryService.searchMessages(
+    searchQuery = "keyword",
+    target = "#general",  // null to search all channels/users
+    limit = 50
+)
+----
+
+=== Get Messages by Sender
+
+[source,kotlin]
+----
+val messages = MessageHistoryService.getMessagesBySender(
+    sender = "alice",
+    limit = 100
+)
+----
+
+=== Cleanup Old Messages
+
+[source,kotlin]
+----
+// Delete messages older than 30 days
+val deleted = MessageHistoryService.cleanupMessagesOlderThan(days = 30)
+
+// Or use an explicit timestamp cutoff
+val cutoff = System.currentTimeMillis() - (30 * 24 * 60 * 60 * 1000L)
+val deleted = MessageHistoryService.cleanupOldMessages(cutoff)
+----
+
+== REST API
+
+`MessageHistoryAPI` wraps the service and adds authentication checks.
+All methods require the `requestingUser` parameter.
+
+[#_access_control_rules]
+=== Access Control Rules
+
+. All methods require a non-null `requestingUser` — unauthenticated calls return an error response.
+. Private message history is restricted to the two participants.
+. `getMessagesBySender` only allows users to retrieve their own messages.
+. Results are filtered to exclude messages from users who have disabled `allow_history_access`.
+
+=== Example Calls
+
+[source,kotlin]
+----
+// Channel history
+val json = MessageHistoryAPI.getChannelHistory(
+    requestingUser = currentUser,
+    channelName = "#general",
+    limit = 50,
+    before = System.currentTimeMillis()
+)
+
+// Private messages (participants only)
+val json = MessageHistoryAPI.getPrivateHistory(
+    requestingUser = currentUser,   // must be user1 or user2
+    user1 = currentUser,
+    user2 = "otherUser",
+    limit = 100
+)
+
+// Search (privacy-filtered)
+val json = MessageHistoryAPI.searchMessages(
+    requestingUser = currentUser,
+    query = "important topic",
+    target = "#general",            // optional
+    limit = 50
+)
+
+// Own messages only
+val json = MessageHistoryAPI.getMessagesBySender(
+    requestingUser = currentUser,
+    sender = currentUser,           // must match requestingUser
+    limit = 100
+)
+
+// Message count
+val json = MessageHistoryAPI.getMessageCount(
+    requestingUser = currentUser,
+    target = "#general"
+)
+----
+
+=== Response Shape
+
+[source,json]
+----
+{
+  "success": true,
+  "messages": [
+    {
+      "id": 1,
+      "timestamp": 1707865200000,
+      "sender": "alice",
+      "target": "#general",
+      "message": "Hello everyone!",
+      "messageType": "PRIVMSG",
+      "isChannelMessage": true
+    }
+  ]
+}
+----
+
+Error responses:
+
+[source,json]
+----
+{"success": false, "messages": [], "error": "Authentication required"}
+----
+
+[source,json]
+----
+{"success": false, "messages": [], "error": "Access denied"}
+----
+
+[source,json]
+----
+{"success": false, "messages": [], "error": "History access disabled by user"}
+----
+
+== Privacy Controls
+
+User privacy is controlled by two flags in the `account` table.
+See xref:authentication.adoc[Authentication] for the full schema.
+
+[cols="2,1,3",options="header"]
+|===
+| Flag | Default | Effect when `false`
+
+| `allow_message_logging`
+| `true`
+| The user's messages are not written to the database.
+  Real-time delivery is unaffected.
+
+| `allow_history_access`
+| `true`
+| The user's messages are filtered out of all API responses.
+  Messages may still exist in the database if logging was enabled.
+|===
+
+.Update via SQL
+[source,sql]
+----
+UPDATE account SET allow_message_logging = false WHERE username = 'privacy_user';
+UPDATE account SET allow_history_access  = false WHERE username = 'privacy_user';
+----
+
+.Update via Kotlin
+[source,kotlin]
+----
+transaction {
+    AccountEntity.find { AccountTable.username eq "privacy_user" }
+        .firstOrNull()
+        ?.apply {
+            allowMessageLogging = false
+            allowHistoryAccess  = false
+        }
+}
+----
+
+TIP: Setting both flags to `false` gives maximum privacy: no new messages are saved and any existing messages are hidden from the API.
+
+== Performance Notes
+
+* History queries use `LIMIT` and cursor-based pagination via the `before` timestamp.
+* Indexes on `(target, timestamp)` and `(sender, timestamp)` keep lookups fast.
+* Search uses SQL `LIKE` — consider PostgreSQL full-text search (`tsvector`) for large deployments.
+* Privacy filtering currently happens in Kotlin; push filtering to the database layer for high-volume use.
+
+== Maintenance
+
+[#_scheduled_cleanup]
+=== Scheduled Cleanup
+
+[source,kotlin]
+----
+// Example: daily cleanup of messages older than 90 days
+val deleted = MessageHistoryService.cleanupMessagesOlderThan(days = 90)
+----
+
+=== Manual SQL
+
+[source,sql]
+----
+-- Truncate all history (irreversible)
+TRUNCATE TABLE message_history;
+
+-- Check database size
+SELECT pg_size_pretty(pg_database_size('malefirc'));
+
+-- Verify indexes
+\d message_history
+----
+
+=== Backup
+
+[source,bash]
+----
+pg_dump -h localhost -U malefirc -d malefirc -t message_history > history_backup.sql
+----
+
+See xref:docker.adoc#_backup_and_restore[Docker → Backup and Restore] for container-based backup procedures.
+
+== Troubleshooting
+
+=== Messages Not Being Logged
+
+. Check database connectivity in server logs.
+. Verify the `message_history` table exists: run `\dt` in `psql`.
+. Check for transaction errors in the server output.
+. Confirm the sender's `allow_message_logging` is `true`.
+
+=== Slow Queries
+
+. Verify indexes: `\d message_history` in `psql`.
+. Reduce the `limit` parameter.
+. Add database-level filtering to replace in-memory Kotlin filtering.
+. For large datasets, consider partitioning by date.
+
+=== Disk Space Growing
+
+. Schedule regular cleanup — see <<_scheduled_cleanup>>.
+. Monitor size: `SELECT pg_size_pretty(pg_database_size('malefirc'));`
+. Archive old messages to separate storage before deleting.
+
+== Planned Features
+
+* PostgreSQL full-text search (`tsvector`/`tsquery`)
+* Message edit and delete tracking
+* Encrypted message storage
+* Advanced search filters (date range, sender, regex)
+* Message export (JSON, CSV)
+* Automatic archival to object storage

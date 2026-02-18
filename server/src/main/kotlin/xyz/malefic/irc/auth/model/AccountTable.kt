@@ -17,6 +17,9 @@ object AccountTable : IntIdTable("account") {
     val createdAt = long("created_at").clientDefault { System.currentTimeMillis() }
     val lastLogin = long("last_login").nullable()
     val isVerified = bool("is_verified").default(false)
+    // Privacy settings
+    val allowMessageLogging = bool("allow_message_logging").default(true)
+    val allowHistoryAccess = bool("allow_history_access").default(true)
 }
 
 class AccountEntity(
@@ -30,6 +33,8 @@ class AccountEntity(
     var createdAt by AccountTable.createdAt
     var lastLogin by AccountTable.lastLogin
     var isVerified by AccountTable.isVerified
+    var allowMessageLogging by AccountTable.allowMessageLogging
+    var allowHistoryAccess by AccountTable.allowHistoryAccess
 }
 
 @InitApi

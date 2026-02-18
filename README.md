@@ -21,6 +21,9 @@ This project is organized into multiple modules:
 - ✅ **Message history and persistence**
 - ✅ **Full-text message search**
 - ✅ **Message archival and cleanup**
+- ✅ **Environment-based configuration (ports, credentials)**
+- ✅ **User privacy settings (opt-out of logging)**
+- ✅ **Authenticated message history API**
 - ✅ Channel operations (JOIN, PART, TOPIC, NAMES, LIST)
 - ✅ Message routing (PRIVMSG to channels and users)
 - ✅ Server queries (WHO, LIST, NAMES)
@@ -59,7 +62,15 @@ docker-compose down
 - Web Client: http://localhost:8080
 - PostgreSQL: `localhost:5432`
 
-See [DOCKER.md](DOCKER.md) for complete Docker documentation.
+**Security Note:** Change default credentials in `docker-compose.yml` for production:
+```yaml
+irc-server:
+  environment:
+    - IRC_OPER_NAME=your_admin
+    - IRC_OPER_PASSWORD=your_secure_password
+```
+
+See [DOCKER.md](docs/DOCKER.md) for complete Docker documentation and [SECURITY.md](docs/SECURITY.md) for security best practices.
 
 ### Running Locally
 
@@ -169,7 +180,7 @@ weechat
 - 401-502: Error codes
 - 900-907: SASL authentication replies
 
-See [AUTHENTICATION.md](AUTHENTICATION.md) for authentication details.
+See [AUTHENTICATION.md](docs/AUTHENTICATION.md) for authentication details.
 
 ## Development
 
@@ -224,19 +235,32 @@ Future enhancements (see implementation plan for details):
 - [x] Message search functionality
 - [x] Automatic archival/cleanup system
 
-See [MESSAGE_HISTORY.md](MESSAGE_HISTORY.md) for complete documentation.
+See [MESSAGE_HISTORY.md](docs/MESSAGE_HISTORY.md) for complete documentation.
 
-### Phase 3: User & Channel Modes (Next)
-- [ ] User modes (invisible, operator, away, etc.)
-- [ ] Channel operator (+o) and voice (+v) modes
-- [ ] Channel modes (moderated, secret, invite-only, etc.)
-- [ ] WHOIS command implementation
+### Phase 3: User & Channel Modes ✅ COMPLETED
+- [x] User modes (invisible, operator, away, etc.)
+- [x] Channel operator (+o) and voice (+v) modes
+- [x] Channel modes (moderated, secret, invite-only, etc.)
+- [x] WHOIS command implementation
 
-### Phase 4: Channel Management
-- [ ] Channel password protection (+k mode)
-- [ ] INVITE/KICK/BAN commands
-- [ ] Channel user limits (+l mode)
-- [ ] OPER command for server operators
+### Phase 4: Channel Management ✅ COMPLETED
+- [x] Channel password protection (+k mode)
+- [x] INVITE/KICK commands
+- [x] BAN management via MODE command
+- [x] Channel user limits (+l mode)
+- [x] OPER command for server operators
+- [x] AWAY command implementation
+
+See [MODES.md](docs/MODES.md) for complete documentation.
+
+### Phase 4.5: Security Enhancements ✅ COMPLETED
+- [x] Environment-based OPER credentials (no hardcoded passwords)
+- [x] User privacy settings (opt-out of message logging)
+- [x] Authenticated message history API
+- [x] Access control for private message history
+- [x] Privacy-respecting search and history retrieval
+
+See [SECURITY.md](docs/SECURITY.md) for security configuration and best practices.
 
 ### Phase 5: SSL/TLS Support
 - [ ] SSL/TLS encryption

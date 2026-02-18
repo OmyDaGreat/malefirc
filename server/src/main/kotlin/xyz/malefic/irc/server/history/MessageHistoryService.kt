@@ -5,6 +5,8 @@ import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.like
 import org.jetbrains.exposed.v1.core.or
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import xyz.malefic.irc.auth.model.AccountEntity
+import xyz.malefic.irc.auth.model.AccountTable
 
 /**
  * Service for managing IRC message history
@@ -12,6 +14,7 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 object MessageHistoryService {
     /**
      * Log a message to the database
+     * Respects user privacy settings - will not log if sender has disabled logging
      */
     fun logMessage(
         sender: String,
@@ -22,6 +25,12 @@ object MessageHistoryService {
     ) {
         try {
             transaction {
+                // Check if sender has opted out of message logging
+                val senderAccount = AccountEntity.find { AccountTable.username eq sender }.firstOrNull()
+                if (senderAccount?.allowMessageLogging == false) {
+                    return@transaction // Don't log if user has opted out
+                }
+                
                 MessageHistoryEntity.new {
                     this.timestamp = System.currentTimeMillis()
                     this.sender = sender

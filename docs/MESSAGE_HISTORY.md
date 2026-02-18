@@ -200,9 +200,21 @@ println("Deleted $deletedCount old messages")
 
 ### Access Control
 
-- The API currently has no access control
-- **TODO:** Add authentication checks before returning history
-- **TODO:** Implement user privacy settings (opt-out of logging)
+✅ **Implemented:** Authentication checks now required for all history API endpoints
+- Users must provide authentication to access message history
+- Private message history restricted to participants only
+- Users can only access their own message history via `getMessagesBySender`
+- Channel history filtered to respect user privacy settings
+
+### Privacy Settings
+
+✅ **Implemented:** User privacy controls in database schema
+- `allow_message_logging`: Users can opt out of message logging (default: true)
+- `allow_history_access`: Users can hide their messages from history API (default: true)
+- Messages from users who opt out are filtered from API responses
+- Privacy settings stored in `account` table
+
+See [SECURITY.md](./SECURITY.md) for detailed privacy configuration.
 
 ### Data Protection
 

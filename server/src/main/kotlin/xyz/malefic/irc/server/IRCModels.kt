@@ -24,6 +24,7 @@ package xyz.malefic.irc.server
  * @property accountName Account name if authenticated (e.g., via SASL or PASS)
  * @property modes Set of user mode flags (i=invisible, o=operator, w=wallops)
  * @property awayMessage Away message if user is away, null otherwise
+ * @property enabledCaps Set of IRCv3 capability names negotiated by this client (e.g. `message-tags`)
  *
  * @see IRCChannel for channel representation
  */
@@ -39,6 +40,7 @@ data class IRCUser(
     var accountName: String? = null,
     var modes: MutableSet<Char> = mutableSetOf(),
     var awayMessage: String? = null,
+    val enabledCaps: MutableSet<String> = mutableSetOf(),
 ) {
     /**
      * Returns the full user mask in nick!user@host format.

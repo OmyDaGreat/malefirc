@@ -42,9 +42,9 @@ docker-compose up -d --force-recreate irc-server
 * [ ] Changed `DB_PASSWORD`
 * [ ] Verified new credentials with `OPER` command
 * [ ] Configured privacy settings for users if required
+* [ ] Enabled SSL/TLS (see xref:tls.adoc[TLS / SSL Support])
 * [ ] Set up backup strategy
 * [ ] Enabled monitoring and log review
-* [ ] Considered SSL/TLS (see <<_planned_features>>)
 
 === Default Settings
 
@@ -76,6 +76,14 @@ Deploying with them leaves your server vulnerable.
 | `IRC_SERVER_NAME` | `malefirc.local` | Hostname shown in server messages
 | `IRC_OPER_NAME` | `admin` | OPER command username
 | `IRC_OPER_PASSWORD` | `adminpass` | OPER command password
+| `IRC_TLS_ENABLED` | `false` | Enable dedicated TLS listener (port 6697)
+| `IRC_TLS_PORT` | `6697` | Port for dedicated TLS connections
+| `IRC_TLS_CERT_FILE` | — | Path to PEM certificate file (use with `IRC_TLS_KEY_FILE`)
+| `IRC_TLS_KEY_FILE` | — | Path to PEM private key file (use with `IRC_TLS_CERT_FILE`)
+| `IRC_TLS_KEYSTORE_PATH` | — | Path to JKS or PKCS12 keystore (auto-generated if absent)
+| `IRC_TLS_KEYSTORE_PASSWORD` | `changeit` | Keystore password
+| `IRC_TLS_KEY_PASSWORD` | `changeit` | Private key password (JKS/PKCS12 only)
+| `IRC_TLS_KEY_ALIAS` | `irc` | Key alias in keystore
 |===
 
 === Database Configuration
@@ -190,7 +198,7 @@ User account passwords are hashed with BCrypt (work factor 10):
 
 * Per-password salts prevent rainbow table attacks.
 * Passwords are never stored or logged in plaintext.
-* The `AUTHENTICATE PLAIN` exchange transmits credentials over the IRC connection — use SSL/TLS in production.
+* The `AUTHENTICATE PLAIN` exchange transmits credentials over the IRC connection — always use SSL/TLS in production (see xref:tls.adoc[TLS / SSL Support]).
 
 === Password Guidelines for Operators
 
@@ -225,7 +233,7 @@ See xref:message-history.adoc#_access_control_rules[Message History → Access C
 
 * Review `allow_message_logging` and `allow_history_access` if privacy matters.
 * Use a strong, unique IRC account password.
-* Be aware that messages are transmitted in plaintext until SSL/TLS is added.
+* Be aware that messages are transmitted in plaintext unless SSL/TLS is enabled (see xref:tls.adoc[TLS / SSL Support]).
 
 === For Administrators
 
@@ -264,7 +272,6 @@ See xref:message-history.adoc#_access_control_rules[Message History → Access C
 [#_planned_features]
 == Planned Features
 
-* SSL/TLS for IRC connections (port 6697, STARTTLS)
 * SASL EXTERNAL (certificate-based authentication)
 * Rate limiting per user and per IP
 * Automated IP ban system

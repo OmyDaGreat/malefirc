@@ -14,6 +14,15 @@ import xyz.malefic.irc.auth.model.auth.Account
 import xyz.malefic.irc.auth.model.auth.LoginResponse
 import xyz.malefic.irc.auth.util.PasswordHash
 
+/**
+ * Kobweb API endpoint for authenticating an IRC user.
+ *
+ * **Method**: POST
+ * **Body**: JSON-encoded [Account] with `username` and `password`.
+ * **Response**: JSON-encoded [LoginResponse] — `{ succeeded: true }` if credentials are valid.
+ *
+ * @param ctx Kobweb [ApiContext] providing request and response objects.
+ */
 @Api
 suspend fun login(ctx: ApiContext) {
     if (ctx.req.method != HttpMethod.POST) return

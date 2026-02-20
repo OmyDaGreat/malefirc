@@ -28,6 +28,12 @@ Compatible with irssi, HexChat, WeeChat, and any RFC 1459/2812 client.
 | xref:security.adoc[Security]
 | Environment variable configuration, operator credentials, user privacy settings, and hardening guide.
 
+| xref:tls.adoc[TLS / SSL Support]
+| Implicit TLS on a dedicated port (6697), keystore configuration, and client setup.
+
+| xref:usage-client.adoc[Client Messaging Guide]
+| Channel messages, direct messages, `@mention` notifications, and threaded replies (IRCv3 `message-tags`).
+
 | xref:testing.adoc[Testing]
 | Manual testing procedures for the server, client, and protocol compliance.
 |===
@@ -40,9 +46,13 @@ Compatible with irssi, HexChat, WeeChat, and any RFC 1459/2812 client.
 |===
 | Service | Port | Notes
 
-| IRC Server
+| IRC Server (plain)
 | 6667
 | Connect with any IRC client
+
+| IRC Server (TLS)
+| 6697
+| Implicit TLS — requires `IRC_TLS_ENABLED=true`
 
 | Web Client
 | 8080

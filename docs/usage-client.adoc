@@ -1,0 +1,266 @@
+= Client Messaging Guide
+:toc: left
+:toc-title: Contents
+:icons: font
+:source-highlighter: rouge
+
+xref:README.adoc[← Back to Index]
+
+This guide covers every messaging feature available in Malefirc: channel and private messages,
+`@mention` notifications, and threaded replies via IRCv3 message tags.
+
+== Connecting
+
+Connect to Malefirc using any standard IRC client on the following ports:
+
+[cols="1,1,2",options="header"]
+|===
+| Port | Protocol | Notes
+| 6667 | Plain TCP | Unencrypted — suitable for local/trusted networks only
+| 6697 | Implicit TLS | Encrypted from the first byte — recommended for all clients
+|===
+
+.Example (irssi)
+[source,irc]
+----
+/connect -tls yourdomain.com 6697
+/nick alice
+/user alice 0 * :Alice Example
+----
+
+== Channel Messages
+
+=== Joining a Channel
+
+[source,irc]
+----
+JOIN #general
+----
+
+=== Sending a Message
+
+[source,irc]
+----
+PRIVMSG #general :Hello, everyone!
+----
+
+Or using your client's built-in message bar after joining the channel.
+
+=== Receiving Messages
+
+Incoming channel messages arrive as:
+
+[source]
+----
+:alice!user@host PRIVMSG #general :Hello, everyone!
+----
+
+Tag-capable clients (those that have negotiated `message-tags`) receive the message with a
+server-assigned unique ID:
+
+[source]
+----
+@msgid=42 :alice!user@host PRIVMSG #general :Hello, everyone!
+----
+
+== Direct Messages (DMs)
+
+Send a private message directly to another user by targeting their nickname instead of a channel:
+
+[source,irc]
+----
+PRIVMSG bob :Hey, got a minute?
+----
+
+Or with most clients:
+
+[source,irc]
+----
+/msg bob Hey, got a minute?
+----
+
+The recipient receives:
+
+[source]
+----
+:alice!user@host PRIVMSG bob :Hey, got a minute?
+----
+
+DMs are stored in message history (subject to each user's privacy settings) and support
+`@mentions` and `+reply` tags in the same way as channel messages.
+
+== Mentions (`@nickname`)
+
+=== Mentioning a User
+
+Type `@nickname` anywhere in a message to mention another user in the channel:
+
+[source,irc]
+----
+PRIVMSG #general :@bob can you review that PR?
+PRIVMSG #general :Thanks @alice and @carol for your help!
+----
+
+=== What the Mentioned User Receives
+
+In addition to seeing the message in the channel like everyone else, the mentioned user
+receives a server `NOTICE` as a direct notification:
+
+[source]
+----
+:malefirc.local NOTICE bob :You were mentioned in #general by alice: @bob can you review that PR?
+----
+
+This works for any IRC client — no special capability negotiation required.
+
+=== Rules
+
+* Mentions are only sent for channel messages, not DMs (a DM is already a direct notification).
+* A user must be **currently online** to receive a mention notice.
+* Mentioning yourself has no effect.
+* Multiple mentions in a single message each produce an individual notice.
+
+== Threaded Replies (IRCv3 `message-tags`)
+
+Replies require the client to negotiate the `message-tags` capability during connection
+setup. Clients that do not negotiate this capability send and receive plain messages without
+threading.
+
+=== Capability Negotiation
+
+Before registering (sending `NICK` / `USER`), request the capability:
+
+[source,irc]
+----
+CAP REQ :message-tags
+CAP END
+----
+
+The server acknowledges:
+
+[source]
+----
+:malefirc.local CAP * ACK :message-tags
+----
+
+=== How Message IDs Work
+
+Once `message-tags` is active, every message the server delivers includes a `msgid` tag:
+
+[source]
+----
+@msgid=42 :alice!user@host PRIVMSG #general :Hello, everyone!
+----
+
+Store this `msgid` value to reference it in a reply.
+
+=== Sending a Reply
+
+Attach the `+reply` client tag to a `PRIVMSG` to indicate which message you are responding to:
+
+[source]
+----
+@+reply=42 PRIVMSG #general :Hi Alice, good to see you!
+----
+
+The server stores the reply relationship and broadcasts the message with both the new `msgid`
+and the forwarded `+reply` tag:
+
+[source]
+----
+@msgid=43;+reply=42 :bob!user@host PRIVMSG #general :Hi Alice, good to see you!
+----
+
+Tag-unaware clients see the message without any tags — it appears as a normal message.
+
+=== Full Example Flow
+
+[source]
+----
+# alice sends a message; server assigns msgid=42
+@msgid=42 :alice!user@host PRIVMSG #general :Anyone tried the new build?
+
+# bob replies, referencing msgid=42
+@+reply=42 PRIVMSG #general :Yes, it works great!
+
+# server broadcasts bob's reply with a new msgid and the +reply forwarded
+@msgid=43;+reply=42 :bob!user@host PRIVMSG #general :Yes, it works great!
+----
+
+== Supported IRCv3 Capabilities
+
+[cols="1,3",options="header"]
+|===
+| Capability | Description
+
+| `sasl`
+| SASL PLAIN authentication. Enables `AUTHENTICATE` command for account login.
+  See xref:authentication.adoc[Authentication] for details.
+
+| `message-tags`
+| IRCv3 message tags. Enables `msgid` on all server-delivered messages and `+reply`
+  on client-sent messages for threaded conversations. Tags are stripped for clients
+  that do not negotiate this capability.
+
+| `msgid`
+| Advertised alongside `message-tags`. Indicates that the server assigns a unique
+  numeric ID (backed by the message history database) to each delivered message.
+|===
+
+Negotiate multiple capabilities in one request:
+
+[source,irc]
+----
+CAP REQ :sasl message-tags
+----
+
+== Message History
+
+All messages are stored in the server database (subject to per-user privacy settings).
+Message history is accessible via the server's REST API — see
+xref:message-history.adoc[Message History] for query and search documentation.
+
+Key points:
+
+* Reply relationships (`+reply` → `msgid`) are persisted and queryable.
+* Messages from users who have opted out of logging are not stored.
+* Channel message history and DM history are stored separately.
+
+== Standard IRC Client Setup
+
+=== irssi
+
+[source,irc]
+----
+/connect -tls yourdomain.com 6697
+/set nick alice
+----
+
+To enable message-tags (if irssi has the capability module):
+[source,irc]
+----
+/load cap
+/cap req message-tags
+----
+
+=== WeeChat
+
+[source]
+----
+/server add malefirc yourdomain.com/6697 -ssl
+/set irc.server.malefirc.ssl_verify off   # for self-signed certs
+/connect malefirc
+----
+
+Enable message-tags in WeeChat (3.4+):
+
+[source]
+----
+/set irc.server.malefirc.capabilities "message-tags"
+----
+
+=== HexChat
+
+. Go to *Network List → Add → Edit*.
+. Set server to `yourdomain.com/6697+` (the `+` enables TLS).
+. Under *Login Method*, select *SASL* if using account authentication.

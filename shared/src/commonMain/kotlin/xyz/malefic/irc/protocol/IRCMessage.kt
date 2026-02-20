@@ -54,6 +54,19 @@ import kotlinx.serialization.Serializable
  * val wireFormat = message.toWireFormat() // ":alice!user@host PRIVMSG #channel :Hello, world!\r\n"
  * ```
  *
+ * ## IRCv3 Message Tags
+ *
+ * Messages may carry metadata as IRCv3 tags, prefixed with `@` before the rest of the line:
+ * ```
+ * @msgid=42;+reply=7 :alice!user@host PRIVMSG #channel :Hello!
+ * ```
+ * Tags are a map of `key → value` (empty string for value-less boolean tags).
+ * Server-assigned tags (e.g. `msgid`) use plain keys; client-only tags use a `+` prefix.
+ *
+ * Tags are only included in the wire format when the map is non-empty, and are only sent
+ * to clients that have negotiated the `message-tags` capability.
+ *
+ * @property tags IRCv3 message tags (empty map if none)
  * @property prefix Optional sender/source of the message (server or user mask)
  * @property command IRC command or numeric reply code
  * @property params List of space-separated parameters (cannot contain spaces)
@@ -65,6 +78,7 @@ import kotlinx.serialization.Serializable
  */
 @Serializable
 data class IRCMessage(
+    val tags: Map<String, String> = emptyMap(),
     val prefix: String? = null,
     val command: String,
     val params: List<String> = emptyList(),
@@ -85,6 +99,13 @@ data class IRCMessage(
      * @see parse for the inverse operation
      */
     fun toWireFormat(): String = buildString {
+        // Prepend IRCv3 tags if present
+        if (tags.isNotEmpty()) {
+            append("@")
+            append(tags.entries.joinToString(";") { (k, v) -> if (v.isEmpty()) k else "$k=$v" })
+            append(" ")
+        }
+
         // Add prefix if present
         prefix?.let { append(":$it ") }
         
@@ -127,6 +148,20 @@ data class IRCMessage(
             if (line.isBlank()) return null
             
             var remaining = line.trimEnd('\r', '\n')
+
+            // Extract IRCv3 message tags (@key=value;key2=value2 ...)
+            val tags = mutableMapOf<String, String>()
+            if (remaining.startsWith('@')) {
+                val spaceIdx = remaining.indexOf(' ')
+                if (spaceIdx == -1) return null
+                val tagStr = remaining.substring(1, spaceIdx)
+                tagStr.split(';').filter { it.isNotEmpty() }.forEach { part ->
+                    val eq = part.indexOf('=')
+                    if (eq == -1) tags[part] = "" else tags[part.substring(0, eq)] = part.substring(eq + 1)
+                }
+                remaining = remaining.substring(spaceIdx + 1)
+            }
+
             var prefix: String? = null
             
             // Extract prefix if present
@@ -152,7 +187,14 @@ data class IRCMessage(
             val command = parts[0].uppercase()
             val params = parts.drop(1)
             
-            return IRCMessage(prefix, command, params, trailing)
+            return IRCMessage(tags, prefix, command, params, trailing)
         }
     }
+
+    /**
+     * Returns a copy of this message with all IRCv3 tags removed.
+     *
+     * Used when sending to clients that have not negotiated the `message-tags` capability.
+     */
+    fun stripTags(): IRCMessage = if (tags.isEmpty()) this else copy(tags = emptyMap())
 }

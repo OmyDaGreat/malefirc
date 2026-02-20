@@ -29,6 +29,7 @@ services:
     restart: unless-stopped
     ports:
       - "6667:6667"
+      - "6697:6697"
     environment:
       # Database configuration
       - DB_HOST=postgres
@@ -42,6 +43,23 @@ services:
       # IRC Operator credentials (CHANGE THESE IN PRODUCTION!)
       - IRC_OPER_NAME=admin
       - IRC_OPER_PASSWORD=adminpass
+      # TLS configuration (disabled by default — see docs/tls.adoc)
+      - IRC_TLS_ENABLED=false
+      - IRC_TLS_PORT=6697
+      # Option 1 — PEM files (Let's Encrypt / Certbot): mount certs volume and set these two vars
+      # - IRC_TLS_CERT_FILE=/certs/fullchain.pem
+      # - IRC_TLS_KEY_FILE=/certs/privkey.pem
+      # Option 2 — PKCS12 keystore (.p12 / .pfx)
+      # - IRC_TLS_KEYSTORE_PATH=/certs/irc.p12
+      # - IRC_TLS_KEYSTORE_PASSWORD=changeit
+      # Option 3 — JKS keystore
+      # - IRC_TLS_KEYSTORE_PATH=/certs/irc.jks
+      # - IRC_TLS_KEYSTORE_PASSWORD=changeit
+      # - IRC_TLS_KEY_PASSWORD=changeit
+      # - IRC_TLS_KEY_ALIAS=irc
+    # volumes:                                            # uncomment for Options 1 or 2
+      # - /etc/letsencrypt/live/yourdomain.com:/certs:ro # Option 1 (Let's Encrypt)
+      # - /path/to/certs:/certs:ro                       # Option 2/3 (keystore file)
     depends_on:
       postgres:
         condition: service_healthy

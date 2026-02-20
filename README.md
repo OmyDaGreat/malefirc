@@ -162,6 +162,7 @@ weechat
 - USER - User registration
 - CAP - Capability negotiation
 - AUTHENTICATE - SASL authentication
+- STARTTLS - TLS upgrade on plain connection
 - JOIN - Join channels
 - PART - Leave channels
 - PRIVMSG - Send messages
@@ -262,10 +263,12 @@ See [Modes](docs/modes.adoc) for complete documentation.
 
 See [Security](docs/security.adoc) for security configuration and best practices.
 
-### Phase 5: SSL/TLS Support
-- [ ] SSL/TLS encryption
-- [ ] Port 6697 for secure connections
-- [ ] STARTTLS command support
+### Phase 5: SSL/TLS Support ✅ COMPLETED
+- [x] SSL/TLS encryption
+- [x] Port 6697 for secure connections
+- [x] STARTTLS command support
+
+See [TLS / SSL Support](docs/tls.adoc) for complete documentation.
 
 ### Phase 6: WebSocket Bridge
 - [ ] WebSocket to IRC protocol bridge

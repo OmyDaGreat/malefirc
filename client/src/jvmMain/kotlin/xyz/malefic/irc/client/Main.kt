@@ -5,6 +5,15 @@ import xyz.malefic.irc.protocol.IRCCommand
 import xyz.malefic.irc.protocol.IRCMessage
 import java.util.*
 
+/**
+ * Terminal-based IRC client with a command-driven interface.
+ *
+ * Wraps an [IRCClient] and provides a simple REPL loop reading from `stdin`.
+ * User input beginning with `/` is interpreted as a command; anything else is sent
+ * as a PRIVMSG to the current channel.
+ *
+ * @param client The [IRCClient] handling the IRC protocol connection.
+ */
 class IRCClientUI(
     private val client: IRCClient
 ) {

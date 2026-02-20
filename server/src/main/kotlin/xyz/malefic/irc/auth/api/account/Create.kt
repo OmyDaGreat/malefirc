@@ -14,6 +14,18 @@ import xyz.malefic.irc.auth.model.auth.Account
 import xyz.malefic.irc.auth.model.auth.CreateAccountResponse
 import xyz.malefic.irc.auth.util.PasswordHash
 
+/**
+ * Kobweb API endpoint for creating a new IRC user account.
+ *
+ * **Method**: POST
+ * **Body**: JSON-encoded [Account] with `username` and `password`.
+ * **Response**: JSON-encoded [CreateAccountResponse] — `{ succeeded: true }` if the
+ * account was created, `{ succeeded: false }` if the username is already taken.
+ *
+ * The password is hashed with BCrypt before being stored; it is never persisted in plaintext.
+ *
+ * @param ctx Kobweb [ApiContext] providing request and response objects.
+ */
 @Api
 suspend fun create(ctx: ApiContext) {
     if (ctx.req.method != HttpMethod.POST) return

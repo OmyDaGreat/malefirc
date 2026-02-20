@@ -19,6 +19,18 @@ import kotlinx.coroutines.launch
 import xyz.malefic.irc.protocol.IRCCommand
 import xyz.malefic.irc.protocol.IRCMessage
 
+/**
+ * Terminal IRC client that connects to an RFC 1459/2812-compliant IRC server.
+ *
+ * Provides coroutine-based send and receive loops, automatic PING/PONG keepalive,
+ * and a callback ([onMessage]) for incoming messages.
+ *
+ * @param host IRC server hostname or IP address.
+ * @param port Server port (default: 6667; use 6697 for TLS).
+ * @param nickname Desired IRC nickname.
+ * @param username IRC username/ident.
+ * @param realname Real name shown in WHOIS (defaults to [nickname]).
+ */
 class IRCClient(
     private val host: String,
     private val port: Int = 6667,

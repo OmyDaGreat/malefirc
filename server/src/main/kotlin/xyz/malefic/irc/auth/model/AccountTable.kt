@@ -10,6 +10,22 @@ import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 
+/**
+ * Exposed ORM table definition for IRC user accounts.
+ *
+ * ## Schema
+ * - `username` — unique, max 50 chars
+ * - `password` — BCrypt hash (60 chars)
+ * - `email` — optional contact address
+ * - `created_at` — Unix timestamp (ms) set on insert
+ * - `last_login` — Unix timestamp (ms), updated by [xyz.malefic.irc.server.auth.AuthenticationService.authenticate]
+ * - `is_verified` — whether the account has been email-verified
+ * - `allow_message_logging` — privacy flag; if `false` messages are not stored
+ * - `allow_history_access` — privacy flag; if `false` messages are hidden from history API
+ *
+ * @see AccountEntity for the DAO wrapper
+ * @see xyz.malefic.irc.auth.util.PasswordHash for password hashing
+ */
 object AccountTable : IntIdTable("account") {
     val username = varchar("username", 50).uniqueIndex()
     val password = varchar("password", 60)
@@ -22,6 +38,13 @@ object AccountTable : IntIdTable("account") {
     val allowHistoryAccess = bool("allow_history_access").default(true)
 }
 
+/**
+ * Exposed DAO entity for a row in [AccountTable].
+ *
+ * Provides type-safe access to all columns via delegated properties.
+ *
+ * @see AccountTable for the column definitions
+ */
 class AccountEntity(
     id: EntityID<Int>,
 ) : IntEntity(id) {

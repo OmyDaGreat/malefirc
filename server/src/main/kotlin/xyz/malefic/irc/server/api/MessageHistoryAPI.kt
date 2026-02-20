@@ -10,10 +10,16 @@ import xyz.malefic.irc.server.history.MessageHistoryService
 import xyz.malefic.irc.server.history.MessageHistoryData
 
 /**
- * API endpoint for retrieving message history
- * This is designed to be used with Kobweb API or similar web framework
- * 
- * All methods require authentication and check privacy settings
+ * REST-oriented API facade for querying IRC message history.
+ *
+ * All methods return a JSON-encoded [HistoryResponse] or [CountResponse] string.
+ * Every call requires a `requestingUser` parameter; unauthenticated requests return
+ * `{ success: false, error: "Authentication required" }`.
+ *
+ * Privacy is enforced by filtering out messages whose senders have set
+ * `allow_history_access = false` in the [AccountTable].
+ *
+ * @see MessageHistoryService for the underlying database queries
  */
 object MessageHistoryAPI {
     
@@ -217,7 +223,11 @@ object MessageHistoryAPI {
 }
 
 /**
- * API response for message history
+ * JSON response envelope for history queries.
+ *
+ * @property success Whether the request succeeded.
+ * @property messages List of messages returned (empty on failure).
+ * @property error Human-readable error message when [success] is `false`.
  */
 @Serializable
 data class HistoryResponse(
@@ -227,7 +237,15 @@ data class HistoryResponse(
 )
 
 /**
- * API message format
+ * A single IRC message in API format, safe for JSON serialisation.
+ *
+ * @property id Database row ID.
+ * @property timestamp Unix timestamp (ms).
+ * @property sender Nickname of the sender.
+ * @property target Channel or recipient nickname.
+ * @property message Message body.
+ * @property messageType IRC command (`PRIVMSG`, `NOTICE`, etc.).
+ * @property isChannelMessage `true` for channel messages, `false` for private messages.
  */
 @Serializable
 data class ApiMessage(
@@ -241,7 +259,11 @@ data class ApiMessage(
 )
 
 /**
- * Count response
+ * JSON response for message count queries.
+ *
+ * @property success Whether the request succeeded.
+ * @property count Number of messages matching the query.
+ * @property error Human-readable error message when [success] is `false`.
  */
 @Serializable
 data class CountResponse(

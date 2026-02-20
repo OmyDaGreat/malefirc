@@ -1,0 +1,253 @@
+= TLS / SSL Support
+:toc: left
+:toc-title: Contents
+:icons: font
+:source-highlighter: rouge
+
+xref:README.adoc[← Back to Index]
+
+This guide covers enabling SSL/TLS encryption for IRC connections using implicit TLS
+on a dedicated port (6697), including keystore setup and connecting with standard IRC clients.
+
+== Overview
+
+Malefirc uses implicit TLS (also called IRC-over-TLS or IRCS): connections on the dedicated
+TLS port (default 6697) are encrypted from the very first byte, completing the TLS handshake
+before any IRC messages are exchanged.  This is the modern, recommended approach and avoids the
+downgrade-attack risk present in STARTTLS.
+
+Both modes are disabled by default and require a TLS keystore to be configured.
+
+== Quick Start (Self-Signed Certificate)
+
+For local development, no keystore configuration is needed.  When
+`IRC_TLS_KEYSTORE_PATH` is not set, the server generates a self-signed certificate
+in memory on startup.
+
+.Enable TLS with self-signed certificate
+[source,bash]
+----
+export IRC_TLS_ENABLED=true
+export IRC_TLS_PORT=6697
+./gradlew :server:run
+----
+
+WARNING: Self-signed certificates are **not trusted** by default in IRC clients.
+You will need to configure your client to accept self-signed certificates, or use
+a proper CA-signed certificate in production.
+
+== Production Setup (CA-Signed Certificate)
+
+=== Step 1 — Obtain a Certificate
+
+Use https://letsencrypt.org[Let's Encrypt] / Certbot or your organisation's CA to obtain
+a certificate for your server's hostname.  Certbot produces `fullchain.pem` and `privkey.pem`.
+
+=== Step 2 — Configure the Server
+
+Choose the option that matches your cert format.  **Option A (PEM) is the simplest** for
+Let's Encrypt users — no conversion required.
+
+==== Option A — PEM files (Let's Encrypt / Certbot) ✓ Recommended
+
+Point the server directly at the PEM files:
+
+[source,bash]
+----
+export IRC_TLS_ENABLED=true
+export IRC_TLS_CERT_FILE=/etc/letsencrypt/live/yourdomain.com/fullchain.pem
+export IRC_TLS_KEY_FILE=/etc/letsencrypt/live/yourdomain.com/privkey.pem
+./gradlew :server:run
+----
+
+Requires `openssl` on the system PATH (standard on any Linux/macOS system).
+
+==== Option B — PKCS12 keystore (`.p12` / `.pfx`)
+
+[source,bash]
+----
+# Create a PKCS12 from PEM files (one-time step)
+openssl pkcs12 -export \
+  -in fullchain.pem \
+  -inkey privkey.pem \
+  -out irc.p12 \
+  -passout pass:yourpassword
+
+export IRC_TLS_ENABLED=true
+export IRC_TLS_KEYSTORE_PATH=/path/to/irc.p12
+export IRC_TLS_KEYSTORE_PASSWORD=yourpassword
+./gradlew :server:run
+----
+
+==== Option C — JKS keystore (legacy Java format)
+
+[source,bash]
+----
+# Convert PKCS12 to JKS (only if your tooling requires JKS specifically)
+keytool -importkeystore \
+  -srckeystore irc.p12 -srcstoretype PKCS12 \
+  -destkeystore irc.jks -deststoretype JKS \
+  -srcstorepass yourpassword -deststorepass yourpassword
+
+export IRC_TLS_ENABLED=true
+export IRC_TLS_KEYSTORE_PATH=/path/to/irc.jks
+export IRC_TLS_KEYSTORE_PASSWORD=yourpassword
+export IRC_TLS_KEY_PASSWORD=yourpassword
+export IRC_TLS_KEY_ALIAS=irc
+./gradlew :server:run
+----
+
+== Environment Variables
+
+[cols="2,1,3",options="header"]
+|===
+| Variable | Default | Description
+
+| `IRC_TLS_ENABLED`
+| `false`
+| Set to `true` to start the dedicated TLS listener on `IRC_TLS_PORT`.
+
+| `IRC_TLS_PORT`
+| `6697`
+| Port for the dedicated TLS listener.
+
+| `IRC_TLS_CERT_FILE`
+| _(none)_
+| Path to a PEM certificate file (e.g. `fullchain.pem`).
+  Set together with `IRC_TLS_KEY_FILE`. Takes priority over `IRC_TLS_KEYSTORE_PATH`.
+
+| `IRC_TLS_KEY_FILE`
+| _(none)_
+| Path to a PEM private key file (e.g. `privkey.pem`).
+  Set together with `IRC_TLS_CERT_FILE`.
+
+| `IRC_TLS_KEYSTORE_PATH`
+| _(none)_
+| Path to a JKS or PKCS12 (`.p12` / `.pfx`) keystore file.
+  If omitted and no PEM files are set, a self-signed certificate is generated in memory.
+
+| `IRC_TLS_KEYSTORE_PASSWORD`
+| `changeit`
+| Password used to open the keystore file.
+
+| `IRC_TLS_KEY_PASSWORD`
+| `changeit`
+| Password protecting the private key entry (JKS / PKCS12 only).
+
+| `IRC_TLS_KEY_ALIAS`
+| `irc`
+| Alias of the key/certificate entry to use within the keystore.
+|===
+
+== Connecting with IRC Clients
+
+=== irssi
+
+[source,irc]
+----
+/connect -tls localhost 6697
+/set tls_verify off        # for self-signed certs only
+----
+
+=== HexChat
+
+. Go to *Network List → Add → Edit*.
+. Set server to `localhost/6697+` (the `+` enables SSL).
+. Under *Login Method*, select *SASL* if using SASL authentication.
+. For self-signed certs, check *Accept invalid SSL certificates*.
+
+=== WeeChat
+
+[source]
+----
+/server add malefirc localhost/6697 -ssl
+/set irc.server.malefirc.ssl_verify off   # for self-signed certs
+/connect malefirc
+----
+
+== Docker Setup
+
+TLS is pre-configured in `docker-compose.yml` but disabled by default.
+Enable it by uncommenting the relevant environment variables and adding a cert volume.
+
+All three cert formats work in Docker — mount your cert files as a read-only volume and
+point the env vars at the paths inside the container.
+
+.Option A — PEM files (Let's Encrypt / Certbot)
+[source,yaml]
+----
+irc-server:
+  ports:
+    - "6667:6667"
+    - "6697:6697"
+  environment:
+    - IRC_TLS_ENABLED=true
+    - IRC_TLS_CERT_FILE=/certs/fullchain.pem
+    - IRC_TLS_KEY_FILE=/certs/privkey.pem
+  volumes:
+    - /etc/letsencrypt/live/yourdomain.com:/certs:ro
+----
+
+.Option B — PKCS12 keystore
+[source,yaml]
+----
+irc-server:
+  environment:
+    - IRC_TLS_ENABLED=true
+    - IRC_TLS_KEYSTORE_PATH=/certs/irc.p12
+    - IRC_TLS_KEYSTORE_PASSWORD=yourpassword
+  volumes:
+    - /path/to/certs:/certs:ro
+----
+
+.Option C — JKS keystore
+[source,yaml]
+----
+irc-server:
+  environment:
+    - IRC_TLS_ENABLED=true
+    - IRC_TLS_KEYSTORE_PATH=/certs/irc.jks
+    - IRC_TLS_KEYSTORE_PASSWORD=yourpassword
+    - IRC_TLS_KEY_PASSWORD=yourpassword
+    - IRC_TLS_KEY_ALIAS=irc
+  volumes:
+    - /path/to/certs:/certs:ro
+----
+
+[source,bash]
+----
+docker-compose up -d --force-recreate irc-server
+----
+
+== Security Considerations
+
+* **Self-signed certificates** — Valid for development only.
+  Users will see a certificate warning. Do not use in production.
+
+* **Plaintext PASS/AUTHENTICATE** — Even without TLS, passwords are hashed with BCrypt on the server.
+  However, the plaintext password travels over the network. Always use TLS in production.
+
+* **Port 6697** — The standard IRC-over-TLS port (RFC 7194). Implicit TLS connections complete
+  the handshake before any IRC traffic, eliminating downgrade attacks.
+
+* **Certificate rotation** — For PEM files and keystores, the server automatically detects
+  cert file changes and reloads within 60 seconds — no restart needed after Let's Encrypt renewal.
+  Self-signed certs are generated once at startup and require a restart to regenerate.
+
+See xref:security.adoc[Security] for general security best practices.
+
+== Troubleshooting
+
+=== TLS port not accepting connections
+
+. Confirm `IRC_TLS_ENABLED=true` in the environment.
+. Check server logs for `IRC Server TLS started on port 6697`.
+. If you see `Failed to initialise TLS context`, verify the keystore path and password.
+. For Docker, ensure port 6697 is mapped in `docker-compose.yml`.
+
+=== SSL handshake failures
+
+. Verify that the keystore contains a valid certificate for the server's hostname.
+. For self-signed certs, configure your client to skip certificate verification.
+. Check that `IRC_TLS_KEY_ALIAS` matches the actual alias in the keystore
+  (`keytool -list -keystore irc.jks` to inspect).

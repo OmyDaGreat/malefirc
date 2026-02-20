@@ -101,23 +101,53 @@ object IRCMessageBuilder {
         )
 
     /**
-     * Creates PRIVMSG command.
+     * Creates PRIVMSG command, optionally with IRCv3 message tags.
      *
      * @param from Sender's user mask (nick!user@host)
      * @param target Channel or nickname
      * @param message Message text
+     * @param tags IRCv3 message tags to attach (e.g. `msgid`, `+reply`)
      * @return PRIVMSG message
      */
     fun privmsg(
         from: String,
         target: String,
         message: String,
+        tags: Map<String, String> = emptyMap(),
     ): IRCMessage =
         IRCMessage(
+            tags = tags,
             prefix = from,
             command = IRCCommand.PRIVMSG,
             params = listOf(target),
             trailing = message,
+        )
+
+    /**
+     * Creates a server NOTICE informing a user they were mentioned in a channel.
+     *
+     * Sent by the server to the mentioned user as a side-channel notification whenever
+     * their nickname appears as `@nickname` in a channel message.
+     *
+     * @param serverName Server hostname used as the message prefix.
+     * @param mentionedNick Nickname of the user who was mentioned.
+     * @param channel Channel where the mention occurred.
+     * @param senderNick Nickname of the user who sent the message.
+     * @param originalText Full text of the message that contained the mention.
+     * @return NOTICE message addressed to [mentionedNick].
+     */
+    fun mentionNotice(
+        serverName: String,
+        mentionedNick: String,
+        channel: String,
+        senderNick: String,
+        originalText: String,
+    ): IRCMessage =
+        IRCMessage(
+            prefix = serverName,
+            command = IRCCommand.NOTICE,
+            params = listOf(mentionedNick),
+            trailing = "You were mentioned in $channel by $senderNick: $originalText",
         )
 
     /**

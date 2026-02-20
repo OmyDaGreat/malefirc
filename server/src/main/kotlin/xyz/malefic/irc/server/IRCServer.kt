@@ -1,93 +1,202 @@
 package xyz.malefic.irc.server
 
-import io.ktor.network.selector.ActorSelectorManager
-import io.ktor.network.sockets.Socket
-import io.ktor.network.sockets.aSocket
-import io.ktor.network.sockets.openReadChannel
-import io.ktor.network.sockets.openWriteChannel
-import io.ktor.utils.io.ByteReadChannel
-import io.ktor.utils.io.ByteWriteChannel
-import io.ktor.utils.io.readLine
-import io.ktor.utils.io.writeStringUtf8
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.channels.ClosedReceiveChannelException
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import xyz.malefic.irc.protocol.IRCCommand
 import xyz.malefic.irc.protocol.IRCMessage
 import xyz.malefic.irc.protocol.IRCMessageBuilder
 import xyz.malefic.irc.protocol.IRCReply
+import xyz.malefic.irc.server.tls.TLSConfig
+import java.io.BufferedReader
+import java.io.InputStreamReader
+import java.io.PrintWriter
+import java.net.ServerSocket
+import java.net.Socket
 import java.util.concurrent.ConcurrentHashMap
+import javax.net.ssl.SSLServerSocket
+import javax.net.ssl.SSLSocket
 
 /**
- * IRC Server implementation with full RFC 1459/2812 protocol support.
+ * IRC Server implementation with full RFC 1459/2812 protocol support, including SSL/TLS.
  *
- * Configuration via environment variables:
- * - IRC_PORT: Server port (default: 6667)
- * - IRC_SERVER_NAME: Server hostname (default: malefirc.local)
- * - IRC_OPER_NAME: Operator username (default: admin)
- * - IRC_OPER_PASSWORD: Operator password (default: adminpass)
+ * Two listeners are started when TLS is enabled:
+ * - Plain TCP on [port] (default 6667).
+ * - Dedicated TLS on [tlsPort] (default 6697) when [tlsEnabled] is `true`.
+ *
+ * ## Configuration via environment variables
+ * | Variable | Default | Description |
+ * |---|---|---|
+ * | `IRC_PORT` | `6667` | Plain TCP port |
+ * | `IRC_SERVER_NAME` | `malefirc.local` | Server hostname shown in messages |
+ * | `IRC_OPER_NAME` | `admin` | OPER command username |
+ * | `IRC_OPER_PASSWORD` | `adminpass` | OPER command password |
+ * | `IRC_TLS_ENABLED` | `false` | Enable dedicated TLS port |
+ * | `IRC_TLS_PORT` | `6697` | Dedicated TLS port |
+ *
+ * @param port Plain TCP port (default from `IRC_PORT` env var or 6667).
+ * @param serverName Hostname used in server messages (default from `IRC_SERVER_NAME` or `malefirc.local`).
+ * @param tlsEnabled Whether to start the dedicated TLS listener.
+ * @param tlsPort Port for the dedicated TLS listener.
+ *
+ * @see TLSConfig for TLS keystore configuration
+ * @see IRCUser for user state
+ * @see IRCChannel for channel state
  */
 class IRCServer(
     private val port: Int = System.getenv("IRC_PORT")?.toIntOrNull() ?: 6667,
     private val serverName: String = System.getenv("IRC_SERVER_NAME") ?: "malefirc.local",
+    private val tlsEnabled: Boolean = TLSConfig.tlsEnabled,
+    private val tlsPort: Int = TLSConfig.tlsPort,
 ) {
     private val users = ConcurrentHashMap<String, ClientConnection>()
     private val channels = ConcurrentHashMap<String, IRCChannel>()
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-    
-    // Server operator credentials from environment or defaults
+
+    /** Server operator credentials sourced from environment variables. */
     private val operName = System.getenv("IRC_OPER_NAME") ?: "admin"
+
+    /** Server operator password sourced from environment variables. */
     private val operPassword = System.getenv("IRC_OPER_PASSWORD") ?: "adminpass"
 
-    data class ClientConnection(
-        val socket: Socket,
-        val input: ByteReadChannel,
-        val output: ByteWriteChannel,
+    /** Regex that matches `@nickname` mention patterns in message text. */
+    private val mentionRegex = Regex("""@([A-Za-z0-9_\-\[\]\\{}^|]+)""")
+
+    /**
+     * Represents an active client connection.
+     *
+     * Wraps the underlying TCP or SSL socket together with buffered I/O streams.
+     *
+     * @property socket The underlying Java [Socket] (plain TCP or [SSLSocket]).
+     * @property reader Buffered reader for incoming IRC lines.
+     * @property writer Print writer for outgoing IRC messages.
+     * @property user The [IRCUser] state associated with this connection.
+     * @property isTLS Whether this connection is using TLS encryption.
+     */
+    class ClientConnection(
+        var socket: Socket,
+        var reader: BufferedReader,
+        var writer: PrintWriter,
         val user: IRCUser,
+        var isTLS: Boolean = false,
     )
 
+    /**
+     * Starts the server, binding to the configured plain and (optionally) TLS ports.
+     *
+     * If [tlsEnabled] is `true`, a separate coroutine is launched to accept TLS connections
+     * on [tlsPort] concurrently with the plain listener on [port].
+     */
     suspend fun start() {
-        val serverSocket =
-            aSocket(ActorSelectorManager(Dispatchers.IO))
-                .tcp()
-                .bind(port = port)
+        if (tlsEnabled) {
+            scope.launch { startTLSListener() }
+        }
 
+        val serverSocket = withContext(Dispatchers.IO) { ServerSocket(port) }
         println("IRC Server started on port $port")
 
         while (true) {
-            val socket = serverSocket.accept()
+            val socket = withContext(Dispatchers.IO) { serverSocket.accept() }
+            scope.launch { handleClient(socket) }
+        }
+    }
+
+    /**
+     * Starts the dedicated TLS listener on [tlsPort].
+     *
+     * Accepts [SSLSocket] connections from an [SSLServerSocket] and handles each in a
+     * separate coroutine. The SSL handshake is completed before [handleClient] is called.
+     */
+    private suspend fun startTLSListener() {
+        val sslContext =
+            try {
+                TLSConfig.createSSLContext()
+            } catch (e: Exception) {
+                println("Failed to initialise TLS context: ${e.message}. TLS port will not be available.")
+                return
+            }
+
+        if (sslContext == null) {
+            println("TLS context could not be created. TLS port will not be available.")
+            return
+        }
+
+        val sslServerSocket =
+            withContext(Dispatchers.IO) {
+                sslContext.serverSocketFactory.createServerSocket(tlsPort) as SSLServerSocket
+            }
+        println("IRC Server TLS started on port $tlsPort")
+
+        while (true) {
+            val sslSocket = withContext(Dispatchers.IO) { sslServerSocket.accept() as SSLSocket }
             scope.launch {
-                handleClient(socket)
+                try {
+                    withContext(Dispatchers.IO) { sslSocket.startHandshake() }
+                    handleClient(sslSocket, isTLS = true)
+                } catch (e: Exception) {
+                    println("TLS handshake failed: ${e.message}")
+                    withContext(Dispatchers.IO) { sslSocket.close() }
+                }
             }
         }
     }
 
-    private suspend fun handleClient(socket: Socket) {
-        val input = socket.openReadChannel()
-        val output = socket.openWriteChannel(autoFlush = true)
-        val user = IRCUser(hostname = socket.remoteAddress.toString())
-        val connection = ClientConnection(socket, input, output, user)
+    /**
+     * Handles an individual client connection for its entire lifetime.
+     *
+     * Reads IRC lines from [socket], parses them, and dispatches to the appropriate
+     * command handler. Cleans up via [disconnect] when the connection closes.
+     *
+     * @param socket The accepted client socket (plain [Socket] or [SSLSocket]).
+     * @param isTLS Whether the connection was accepted on the TLS port.
+     */
+    private suspend fun handleClient(
+        socket: Socket,
+        isTLS: Boolean = false,
+    ) {
+        val reader =
+            withContext(Dispatchers.IO) {
+                BufferedReader(InputStreamReader(socket.inputStream))
+            }
+        val writer =
+            withContext(Dispatchers.IO) {
+                PrintWriter(socket.outputStream, true)
+            }
+        val hostname = socket.inetAddress?.hostAddress ?: socket.remoteSocketAddress.toString()
+        val user = IRCUser(hostname = hostname)
+        val connection = ClientConnection(socket, reader, writer, user, isTLS = isTLS)
 
         try {
             while (true) {
-                val line = input.readLine() ?: break
+                val line = withContext(Dispatchers.IO) { connection.reader.readLine() } ?: break
                 val message = IRCMessage.parse(line) ?: continue
-
                 handleMessage(connection, message)
             }
-        } catch (_: ClosedReceiveChannelException) {
-            println("Client disconnected: ${user.nickname}")
         } catch (e: Exception) {
-            println("Error handling client: ${e.message}")
-            e.printStackTrace()
+            if (e.message?.contains("Connection reset") == true ||
+                e.message?.contains("Broken pipe") == true ||
+                e.message?.contains("Socket closed") == true
+            ) {
+                println("Client disconnected: ${user.nickname}")
+            } else {
+                println("Error handling client ${user.nickname}: ${e.message}")
+            }
         } finally {
             disconnect(connection)
         }
     }
 
+    /**
+     * Dispatches a single parsed [IRCMessage] to the appropriate command handler.
+     *
+     * Commands are matched case-insensitively using [IRCCommand] constants. Unknown
+     * commands receive an [IRCReply.ERR_UNKNOWNCOMMAND] response if the user is registered.
+     *
+     * @param connection The client connection that sent the message.
+     * @param message The parsed IRC message.
+     */
     private suspend fun handleMessage(
         connection: ClientConnection,
         message: IRCMessage,
@@ -191,6 +300,16 @@ class IRCServer(
         }
     }
 
+    /**
+     * Handles the `PASS` command.
+     *
+     * Stores the provided password for use during registration authentication.
+     * Must be called before NICK/USER registration is complete. Sending PASS
+     * after registration results in [IRCReply.ERR_ALREADYREGISTERED].
+     *
+     * @param connection The client connection.
+     * @param message The parsed PASS message. First param must be the password.
+     */
     private suspend fun handlePass(
         connection: ClientConnection,
         message: IRCMessage,
@@ -227,6 +346,27 @@ class IRCServer(
         user.password = password
     }
 
+    /**
+     * Supported IRCv3 capabilities advertised via CAP LS.
+     *
+     * - `sasl` — SASL PLAIN authentication.
+     * - `message-tags` — IRCv3 message tags (enables `msgid` on outgoing messages and
+     *   `+reply` on incoming messages for threaded conversations).
+     * - `msgid` — Indicates that the server assigns a unique ID to each message via the
+     *   `msgid` tag (implicitly enabled when `message-tags` is negotiated).
+     */
+    private val supportedCaps = setOf("sasl", "message-tags", "msgid")
+
+    /**
+     * Handles the `CAP` capability negotiation command.
+     *
+     * Supports subcommands: `LS` (list capabilities), `REQ` (request capability),
+     * `ACK`/`NAK` (ack/nack), `END` (end negotiation), and `LIST` (active capabilities).
+     * Currently advertises the `sasl` capability.
+     *
+     * @param connection The client connection.
+     * @param message The parsed CAP message.
+     */
     private suspend fun handleCap(
         connection: ClientConnection,
         message: IRCMessage,
@@ -236,32 +376,21 @@ class IRCServer(
 
         when (subcommand) {
             "LS" -> {
-                // List supported capabilities
                 sendMessage(
                     connection,
                     IRCMessage(
                         prefix = serverName,
                         command = "CAP",
                         params = listOf(user.nickname ?: "*", "LS"),
-                        trailing = "sasl",
+                        trailing = supportedCaps.joinToString(" "),
                     ),
                 )
             }
 
             "REQ" -> {
-                // Client requests capabilities
-                val caps = message.trailing?.split(" ") ?: emptyList()
-                if (caps.contains("sasl")) {
-                    sendMessage(
-                        connection,
-                        IRCMessage(
-                            prefix = serverName,
-                            command = "CAP",
-                            params = listOf(user.nickname ?: "*", "ACK"),
-                            trailing = "sasl",
-                        ),
-                    )
-                } else {
+                val requested = (message.trailing ?: "").split(" ").filter { it.isNotEmpty() }
+                val unknown = requested.filter { it !in supportedCaps }
+                if (unknown.isNotEmpty()) {
                     sendMessage(
                         connection,
                         IRCMessage(
@@ -271,23 +400,32 @@ class IRCServer(
                             trailing = message.trailing,
                         ),
                     )
+                } else {
+                    user.enabledCaps.addAll(requested)
+                    sendMessage(
+                        connection,
+                        IRCMessage(
+                            prefix = serverName,
+                            command = "CAP",
+                            params = listOf(user.nickname ?: "*", "ACK"),
+                            trailing = requested.joinToString(" "),
+                        ),
+                    )
                 }
             }
 
             "END" -> {
-                // Client done with capability negotiation
-                // Nothing special needed
+                // Client done with capability negotiation — nothing special needed
             }
 
             "LIST" -> {
-                // List active capabilities
                 sendMessage(
                     connection,
                     IRCMessage(
                         prefix = serverName,
                         command = "CAP",
                         params = listOf(user.nickname ?: "*", "LIST"),
-                        trailing = if (user.authenticated) "sasl" else "",
+                        trailing = user.enabledCaps.joinToString(" "),
                     ),
                 )
             }
@@ -296,6 +434,15 @@ class IRCServer(
 
     private var saslBuffer = ConcurrentHashMap<ClientConnection, String>()
 
+    /**
+     * Handles the `AUTHENTICATE` command for SASL PLAIN authentication.
+     *
+     * Supports multi-chunk base64 payloads (chunks of exactly 400 characters are buffered).
+     * On success, sets [IRCUser.authenticated] and [IRCUser.accountName].
+     *
+     * @param connection The client connection.
+     * @param message The parsed AUTHENTICATE message.
+     */
     private suspend fun handleAuthenticate(
         connection: ClientConnection,
         message: IRCMessage,
@@ -431,6 +578,15 @@ class IRCServer(
         }
     }
 
+    /**
+     * Handles the `NICK` command to set or change a user's nickname.
+     *
+     * If the nickname is taken, replies with [IRCReply.ERR_NICKNAMEINUSE].
+     * If the user's username is also set, triggers [completeRegistration].
+     *
+     * @param connection The client connection.
+     * @param message The parsed NICK message. First param is the requested nickname.
+     */
     private suspend fun handleNick(
         connection: ClientConnection,
         message: IRCMessage,
@@ -477,6 +633,14 @@ class IRCServer(
         }
     }
 
+    /**
+     * Handles the `USER` command to set the user's username and real name.
+     *
+     * Triggers [completeRegistration] if [IRCUser.nickname] is already set.
+     *
+     * @param connection The client connection.
+     * @param message The parsed USER message (params: username, mode, unused; trailing: realname).
+     */
     private suspend fun handleUser(
         connection: ClientConnection,
         message: IRCMessage,
@@ -517,6 +681,14 @@ class IRCServer(
         }
     }
 
+    /**
+     * Completes the IRC registration handshake once both NICK and USER have been received.
+     *
+     * Attempts PASS-based authentication if a password was supplied, then sends the welcome
+     * burst (001–004, MOTD) to the client.
+     *
+     * @param connection The client connection whose registration is being finalised.
+     */
     private suspend fun completeRegistration(connection: ClientConnection) {
         val user = connection.user
 
@@ -559,6 +731,15 @@ class IRCServer(
         }
     }
 
+    /**
+     * Handles the `JOIN` command to add the user to one or more channels.
+     *
+     * Enforces ban list, invite-only (+i), channel key (+k), and user limit (+l) checks.
+     * The first user to join a channel automatically becomes its operator.
+     *
+     * @param connection The client connection.
+     * @param message The parsed JOIN message (params: comma-separated channel names[, keys]).
+     */
     private suspend fun handleJoin(
         connection: ClientConnection,
         message: IRCMessage,
@@ -670,6 +851,15 @@ class IRCServer(
         }
     }
 
+    /**
+     * Handles the `PART` command to remove the user from a channel.
+     *
+     * Broadcasts the PART message to remaining channel members and removes the channel
+     * from the server if it becomes empty.
+     *
+     * @param connection The client connection.
+     * @param message The parsed PART message (params: channel name; optional trailing: part reason).
+     */
     private suspend fun handlePart(
         connection: ClientConnection,
         message: IRCMessage,
@@ -706,6 +896,27 @@ class IRCServer(
         }
     }
 
+    /**
+     * Handles the `PRIVMSG` command for channel and direct messages.
+     *
+     * Enforces +n (no external messages) and +m (moderated) channel restrictions.
+     * All messages are persisted via [MessageHistoryService] and away notifications
+     * are delivered when messaging an absent user.
+     *
+     * ## Mentions
+     * Any `@nickname` pattern in the message text triggers a server [IRCCommand.NOTICE] to the
+     * mentioned user (if they are online). The original message is broadcast unchanged so all
+     * channel members see the mention in context.
+     *
+     * ## Replies (IRCv3 message-tags)
+     * If the incoming message carries a `+reply=<msgId>` tag, the reply relationship is stored
+     * in the database (`replyToId`). The server assigns a `msgid` tag to every broadcast message
+     * (using the database row ID) so tag-capable clients can thread conversations.
+     * Tags are stripped for clients that have not negotiated the `message-tags` capability.
+     *
+     * @param connection The client connection.
+     * @param message The parsed PRIVMSG message (params: target; trailing: message text).
+     */
     private suspend fun handlePrivmsg(
         connection: ClientConnection,
         message: IRCMessage,
@@ -715,6 +926,9 @@ class IRCServer(
 
         val target = message.params.firstOrNull() ?: return
         val text = message.trailing ?: return
+
+        // Extract +reply tag referencing a parent message ID (IRCv3 client tag)
+        val replyToId = message.tags["+reply"]?.toLongOrNull()
 
         if (target.startsWith('#')) {
             // Channel message
@@ -761,17 +975,39 @@ class IRCServer(
                 return
             }
 
-            val privmsg = IRCMessageBuilder.privmsg(user.fullMask(), target, text)
+            // Persist first so we can attach the assigned database ID as msgid
+            val msgId =
+                xyz.malefic.irc.server.history.MessageHistoryService.logMessage(
+                    sender = user.nickname!!,
+                    target = target,
+                    message = text,
+                    messageType = "PRIVMSG",
+                    isChannelMessage = true,
+                    replyToId = replyToId,
+                )
+
+            // Build outgoing tags: msgid from DB row; forward +reply if present
+            val outTags =
+                buildMap<String, String> {
+                    if (msgId != null) put("msgid", msgId.toString())
+                    if (replyToId != null) put("+reply", replyToId.toString())
+                }
+
+            val privmsg = IRCMessageBuilder.privmsg(user.fullMask(), target, text, outTags)
             broadcastToChannel(channel, privmsg, except = user.nickname)
 
-            // Log channel message to history
-            xyz.malefic.irc.server.history.MessageHistoryService.logMessage(
-                sender = user.nickname!!,
-                target = target,
-                message = text,
-                messageType = "PRIVMSG",
-                isChannelMessage = true,
-            )
+            // Send mention NOTICEs for every @nick in the text
+            mentionRegex.findAll(text).forEach { match ->
+                val mentionedNick = match.groupValues[1]
+                if (mentionedNick != user.nickname && channel.users.containsKey(mentionedNick)) {
+                    users[mentionedNick]?.let { mentionedConn ->
+                        sendMessage(
+                            mentionedConn,
+                            IRCMessageBuilder.mentionNotice(serverName, mentionedNick, target, user.nickname!!, text),
+                        )
+                    }
+                }
+            }
         } else {
             // Private message
             val targetConn = users[target]
@@ -788,20 +1024,35 @@ class IRCServer(
                 return
             }
 
-            val privmsg = IRCMessageBuilder.privmsg(user.fullMask(), target, text)
-            sendMessage(targetConn, privmsg)
+            val msgId =
+                xyz.malefic.irc.server.history.MessageHistoryService.logMessage(
+                    sender = user.nickname!!,
+                    target = target,
+                    message = text,
+                    messageType = "PRIVMSG",
+                    isChannelMessage = false,
+                    replyToId = replyToId,
+                )
 
-            // Log private message to history
-            xyz.malefic.irc.server.history.MessageHistoryService.logMessage(
-                sender = user.nickname!!,
-                target = target,
-                message = text,
-                messageType = "PRIVMSG",
-                isChannelMessage = false,
-            )
+            val outTags =
+                buildMap<String, String> {
+                    if (msgId != null) put("msgid", msgId.toString())
+                    if (replyToId != null) put("+reply", replyToId.toString())
+                }
+
+            val privmsg = IRCMessageBuilder.privmsg(user.fullMask(), target, text, outTags)
+            sendMessage(targetConn, privmsg)
         }
     }
 
+    /**
+     * Handles the `QUIT` command to gracefully disconnect the client.
+     *
+     * Delegates to [disconnect] with the optional quit reason from the message trailing.
+     *
+     * @param connection The client connection.
+     * @param message The parsed QUIT message (optional trailing: quit reason).
+     */
     private suspend fun handleQuit(
         connection: ClientConnection,
         message: IRCMessage,
@@ -809,6 +1060,12 @@ class IRCServer(
         disconnect(connection, message.trailing ?: "Client quit")
     }
 
+    /**
+     * Handles the `PING` command by replying with a matching `PONG`.
+     *
+     * @param connection The client connection.
+     * @param message The parsed PING message (optional params: server token to echo back).
+     */
     private suspend fun handlePing(
         connection: ClientConnection,
         message: IRCMessage,
@@ -817,6 +1074,15 @@ class IRCServer(
         sendMessage(connection, IRCMessageBuilder.pong(serverName, server))
     }
 
+    /**
+     * Handles the `TOPIC` command to get or set the topic of a channel.
+     *
+     * When a trailing text is provided the topic is updated (subject to +t operator-only
+     * restriction) and broadcast to all channel members; otherwise the current topic is returned.
+     *
+     * @param connection The client connection.
+     * @param message The parsed TOPIC message (params: channel; optional trailing: new topic text).
+     */
     private suspend fun handleTopic(
         connection: ClientConnection,
         message: IRCMessage,
@@ -875,6 +1141,15 @@ class IRCServer(
         }
     }
 
+    /**
+     * Handles the `NAMES` command to list the members of a channel.
+     *
+     * Replies with a 353 name list (prefixed with `@`/`+` for operators/voiced users)
+     * followed by a 366 end-of-names reply.
+     *
+     * @param connection The client connection.
+     * @param message The parsed NAMES message (params: channel name).
+     */
     private suspend fun handleNames(
         connection: ClientConnection,
         message: IRCMessage,
@@ -900,6 +1175,14 @@ class IRCServer(
         }
     }
 
+    /**
+     * Handles the `LIST` command to enumerate active channels with their topics and user counts.
+     *
+     * Sends a 321 list-start, one 322 reply per channel, and a 323 list-end reply.
+     *
+     * @param connection The client connection.
+     * @param message The parsed LIST message (params ignored; all channels are returned).
+     */
     private suspend fun handleList(
         connection: ClientConnection,
         message: IRCMessage,
@@ -944,6 +1227,15 @@ class IRCServer(
         )
     }
 
+    /**
+     * Handles the `WHO` command to query users in a channel.
+     *
+     * Sends a 352 reply for each member of the target channel, followed by a 315
+     * end-of-WHO reply.
+     *
+     * @param connection The client connection.
+     * @param message The parsed WHO message (params: target channel name).
+     */
     private suspend fun handleWho(
         connection: ClientConnection,
         message: IRCMessage,
@@ -989,6 +1281,13 @@ class IRCServer(
         )
     }
 
+    /**
+     * Handles the `MODE` command, dispatching to [handleUserMode] or [handleChannelMode]
+     * based on whether the target begins with `#`.
+     *
+     * @param connection The client connection.
+     * @param message The parsed MODE message (params: target[, modestring[, mode arguments]]).
+     */
     private suspend fun handleMode(
         connection: ClientConnection,
         message: IRCMessage,
@@ -1005,6 +1304,16 @@ class IRCServer(
         }
     }
 
+    /**
+     * Handles user MODE changes (e.g. `+i`, `+o`, `+w`).
+     *
+     * Only the target user themselves (or a server operator) may change user modes.
+     * Mode changes are applied and echoed back to the client.
+     *
+     * @param connection The client connection.
+     * @param message The parsed MODE message containing the modestring and arguments.
+     * @param targetNick The nickname whose modes are being queried or modified.
+     */
     private suspend fun handleUserMode(
         connection: ClientConnection,
         message: IRCMessage,
@@ -1085,6 +1394,16 @@ class IRCServer(
         }
     }
 
+    /**
+     * Handles channel MODE changes (e.g. `+o`, `+k`, `+l`, `+b`).
+     *
+     * Requires the requesting user to be a channel operator for write operations.
+     * Mode changes are broadcast to all channel members.
+     *
+     * @param connection The client connection.
+     * @param message The parsed MODE message containing the modestring and arguments.
+     * @param channelName The name of the channel whose modes are being queried or modified.
+     */
     private suspend fun handleChannelMode(
         connection: ClientConnection,
         message: IRCMessage,
@@ -1264,6 +1583,15 @@ class IRCServer(
         }
     }
 
+    /**
+     * Handles the `WHOIS` command to return detailed information about a user.
+     *
+     * Sends replies for user info (311), server (312), channels (319), idle time (317),
+     * and operator status (313) where applicable, terminated by a 318 end-of-WHOIS reply.
+     *
+     * @param connection The client connection.
+     * @param message The parsed WHOIS message (params: target nickname).
+     */
     private suspend fun handleWhois(
         connection: ClientConnection,
         message: IRCMessage,
@@ -1391,6 +1719,15 @@ class IRCServer(
         )
     }
 
+    /**
+     * Handles the `INVITE` command to invite a user to a channel.
+     *
+     * Requires the inviting user to be a channel operator. Adds the invitee to the
+     * channel's invite list and notifies them with a 341 reply.
+     *
+     * @param connection The client connection.
+     * @param message The parsed INVITE message (params: target nickname, channel name).
+     */
     private suspend fun handleInvite(
         connection: ClientConnection,
         message: IRCMessage,
@@ -1508,6 +1845,15 @@ class IRCServer(
         )
     }
 
+    /**
+     * Handles the `KICK` command to forcibly remove a user from a channel.
+     *
+     * Requires the kicking user to be a channel operator. Broadcasts the KICK message
+     * to the channel and removes the target from the channel's user list.
+     *
+     * @param connection The client connection.
+     * @param message The parsed KICK message (params: channel, target nick; optional trailing: reason).
+     */
     private suspend fun handleKick(
         connection: ClientConnection,
         message: IRCMessage,
@@ -1596,6 +1942,15 @@ class IRCServer(
         }
     }
 
+    /**
+     * Handles the `AWAY` command to set or clear the user's away status.
+     *
+     * If a trailing message is provided the user is marked away (306); omitting it
+     * clears the away status (305). The away message is delivered to other users via PRIVMSG.
+     *
+     * @param connection The client connection.
+     * @param message The parsed AWAY message (optional trailing: away reason).
+     */
     private suspend fun handleAway(
         connection: ClientConnection,
         message: IRCMessage,
@@ -1630,6 +1985,15 @@ class IRCServer(
         }
     }
 
+    /**
+     * Handles the `OPER` command to grant IRC operator privileges.
+     *
+     * Validates the supplied name and password against the configured operator credentials.
+     * On success the `o` user mode is set and a 381 reply is sent; on failure a 464 reply.
+     *
+     * @param connection The client connection.
+     * @param message The parsed OPER message (params: oper-name, password).
+     */
     private suspend fun handleOper(
         connection: ClientConnection,
         message: IRCMessage,
@@ -1678,6 +2042,12 @@ class IRCServer(
         }
     }
 
+    /**
+     * Cleans up a client connection, notifying channels and removing the user from the server.
+     *
+     * @param connection The connection to close.
+     * @param reason Human-readable quit reason broadcast to channels the user was in.
+     */
     private suspend fun disconnect(
         connection: ClientConnection,
         reason: String = "Connection closed",
@@ -1710,17 +2080,35 @@ class IRCServer(
         }
     }
 
+    /**
+     * Sends an IRC message to a single client connection.
+     *
+     * @param connection The target connection.
+     * @param message The [IRCMessage] to send.
+     */
     private suspend fun sendMessage(
         connection: ClientConnection,
         message: IRCMessage,
     ) {
         try {
-            connection.output.writeStringUtf8(message.toWireFormat())
+            // Strip IRCv3 tags for clients that have not negotiated message-tags
+            val wire = if (connection.user.enabledCaps.contains("message-tags")) message else message.stripTags()
+            withContext(Dispatchers.IO) {
+                connection.writer.print(wire.toWireFormat())
+                connection.writer.flush()
+            }
         } catch (e: Exception) {
             println("Error sending message: ${e.message}")
         }
     }
 
+    /**
+     * Broadcasts an IRC message to all users in a channel, optionally excluding one nick.
+     *
+     * @param channel The channel to broadcast to.
+     * @param message The message to broadcast.
+     * @param except Optional nickname to exclude from the broadcast (e.g., the sender).
+     */
     private suspend fun broadcastToChannel(
         channel: IRCChannel,
         message: IRCMessage,

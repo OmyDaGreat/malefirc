@@ -29,6 +29,7 @@ services:
     restart: unless-stopped
     ports:
       - "6667:6667"
+      - "6680:6680"
       - "6697:6697"
     environment:
       # Database configuration
@@ -46,6 +47,9 @@ services:
       # TLS configuration (disabled by default — see docs/tls.adoc)
       - IRC_TLS_ENABLED=false
       - IRC_TLS_PORT=6697
+      # WebSocket bridge configuration
+      - IRC_WS_ENABLED=true
+      - IRC_WS_PORT=6680
       # Option 1 — PEM files (Let's Encrypt / Certbot): mount certs volume and set these two vars
       # - IRC_TLS_CERT_FILE=/certs/fullchain.pem
       # - IRC_TLS_KEY_FILE=/certs/privkey.pem

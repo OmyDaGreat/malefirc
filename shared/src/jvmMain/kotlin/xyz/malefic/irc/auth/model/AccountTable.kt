@@ -1,14 +1,9 @@
 package xyz.malefic.irc.auth.model
 
-import com.varabyte.kobweb.api.init.InitApi
-import com.varabyte.kobweb.api.init.InitApiContext
 import org.jetbrains.exposed.v1.core.dao.id.EntityID
 import org.jetbrains.exposed.v1.core.dao.id.IntIdTable
 import org.jetbrains.exposed.v1.dao.IntEntity
 import org.jetbrains.exposed.v1.dao.IntEntityClass
-import org.jetbrains.exposed.v1.jdbc.Database
-import org.jetbrains.exposed.v1.jdbc.SchemaUtils
-import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 
 /**
  * Exposed ORM table definition for IRC user accounts.
@@ -18,7 +13,7 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
  * - `password` — BCrypt hash (60 chars)
  * - `email` — optional contact address
  * - `created_at` — Unix timestamp (ms) set on insert
- * - `last_login` — Unix timestamp (ms), updated by [xyz.malefic.irc.server.auth.AuthenticationService.authenticate]
+ * - `last_login` — Unix timestamp (ms), updated by [AuthenticationService.authenticate]
  * - `is_verified` — whether the account has been email-verified
  * - `allow_message_logging` — privacy flag; if `false` messages are not stored
  * - `allow_history_access` — privacy flag; if `false` messages are hidden from history API
@@ -60,22 +55,3 @@ class AccountEntity(
     var allowHistoryAccess by AccountTable.allowHistoryAccess
 }
 
-@InitApi
-fun initDatabase(ctx: InitApiContext) {
-    val dbHost = System.getenv("DB_HOST") ?: "localhost"
-    val dbPort = System.getenv("DB_PORT") ?: "5432"
-    val dbName = System.getenv("DB_NAME") ?: "malefirc"
-    val dbUser = System.getenv("DB_USER") ?: "malefirc"
-    val dbPassword = System.getenv("DB_PASSWORD") ?: "malefirc"
-    
-    Database.connect(
-        url = "jdbc:postgresql://$dbHost:$dbPort/$dbName",
-        driver = "org.postgresql.Driver",
-        user = dbUser,
-        password = dbPassword,
-    )
-
-    transaction {
-        SchemaUtils.create(AccountTable)
-    }
-}

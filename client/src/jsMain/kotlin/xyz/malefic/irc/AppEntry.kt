@@ -22,11 +22,19 @@ import org.jetbrains.compose.web.css.vh
 
 private const val COLOR_MODE_KEY = "chat:app:colorMode"
 
+/**
+ * Silk `@InitSilk` hook that restores the user's last-saved colour mode from
+ * `localStorage` on startup, falling back to the OS system preference.
+ */
 @InitSilk
 fun updateTheme(ctx: InitSilkContext) {
     ctx.config.initialColorMode = ColorMode.loadFromLocalStorage(COLOR_MODE_KEY) ?: ColorMode.systemPreference
 }
 
+/**
+ * Silk `@InitSilk` hook that registers global CSS baseline styles (font stack,
+ * line height) applied to the `body` element.
+ */
 @InitSilk
 fun registerGlobalStyles(ctx: InitSilkContext) =
     ctx.stylesheet.apply {
@@ -48,6 +56,16 @@ fun registerGlobalStyles(ctx: InitSilkContext) =
         }
     }
 
+/**
+ * Root Kobweb `@App` composable.
+ *
+ * Wraps every page in a [SilkApp] + [Surface] so that Silk colour-mode and
+ * smooth-colour transitions are available throughout the application.  The
+ * active [ColorMode] is persisted to `localStorage` under [COLOR_MODE_KEY]
+ * whenever it changes.
+ *
+ * @param content The page content provided by Kobweb's routing layer.
+ */
 @App
 @Composable
 fun AppEntry(content: @Composable () -> Unit) {

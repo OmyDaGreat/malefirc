@@ -14,11 +14,11 @@ application {
 dependencies {
     implementation(project(":shared"))
     implementation(libs.ktor.network)
+    implementation(libs.ktor.server.core)
+    implementation(libs.ktor.server.netty)
+    implementation(libs.ktor.server.websockets)
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.serialization.json)
-    implementation(libs.bundles.exposed)
-    implementation(libs.postgres)
     implementation(libs.kermit)
     implementation(libs.kobweb.api)
-    implementation(libs.jbcrypt)
 }

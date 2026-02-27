@@ -20,6 +20,9 @@ kotlin {
         jsMain.dependencies {
         }
         jvmMain.dependencies {
+            api(libs.bundles.exposed)
+            api(libs.postgres)
+            api(libs.jbcrypt)
         }
     }
 }

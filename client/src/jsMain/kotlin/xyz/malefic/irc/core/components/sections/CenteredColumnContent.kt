@@ -9,6 +9,13 @@ import com.varabyte.kobweb.compose.ui.modifiers.fillMaxSize
 import com.varabyte.kobweb.compose.ui.modifiers.padding
 import org.jetbrains.compose.web.css.px
 
+/**
+ * A full-size [Column] that centres its children horizontally with top padding.
+ *
+ * Used on all auth and chat pages to provide a consistent centred layout.
+ *
+ * @param content Composable slot rendered inside the column.
+ */
 @Composable
 fun CenteredColumnContent(content: @Composable ColumnScope.() -> Unit) {
     Column(

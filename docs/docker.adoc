@@ -235,7 +235,7 @@ docker-compose exec irc-server env | grep IRC_
 
 . Change all default passwords in `docker-compose.yml`.
 . Use https://docs.docker.com/engine/swarm/secrets/[Docker Secrets] for sensitive values.
-. Enable SSL/TLS for IRC (port 6697) — planned for a future release.
+. Enable SSL/TLS for IRC (port 6697) — see xref:tls.adoc[TLS / SSL Support] for setup.
 . Serve the web client over HTTPS (update the Nginx config).
 . Set up automated backups for the `postgres_data` volume.
 . Apply resource limits:

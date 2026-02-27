@@ -14,6 +14,7 @@ import org.jetbrains.compose.web.css.px
 import org.jetbrains.compose.web.dom.Text
 import xyz.malefic.irc.core.G
 
+/** Silk CSS style for the outer [TextButton] wrapper — sets width, margin, padding, and font size. */
 val TextButtonStyle =
     CssStyle.base {
         Modifier
@@ -23,6 +24,14 @@ val TextButtonStyle =
             .fontSize(G.Ui.Text.Medium)
     }
 
+/**
+ * A full-width styled button that displays a text label.
+ *
+ * @param text Label rendered inside the button.
+ * @param modifier Additional [Modifier] merged after the base style.
+ * @param enabled Whether the button is interactive; defaults to `true`.
+ * @param onClick Callback invoked on click.
+ */
 @Composable
 fun TextButton(
     text: String,

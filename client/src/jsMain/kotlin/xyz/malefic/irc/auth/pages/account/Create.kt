@@ -12,11 +12,21 @@ import kotlinx.browser.window
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import xyz.malefic.irc.auth.model.auth.Account
+import xyz.malefic.irc.auth.model.auth.CreateAccountResponse
 import xyz.malefic.irc.auth.model.auth.LoginState
 import xyz.malefic.irc.core.components.layouts.PageLayout
 import xyz.malefic.irc.core.components.sections.CenteredColumnContent
+import xyz.malefic.irc.core.components.widgets.TextButton
 import xyz.malefic.irc.core.components.widgets.TitledTextInput
+import xyz.malefic.irc.core.styles.ErrorTextStyle
 
+/**
+ * Account creation page.
+ *
+ * Validates username/password constraints (no whitespace, passwords match), then POSTs
+ * to `/api/account/create`.  On success, sets [LoginState.current] to [LoginState.LoggedIn]
+ * and navigates to `/chat`.
+ */
 @Page
 @Composable
 fun CreateAccountPage() {
@@ -51,7 +61,7 @@ fun CreateAccountPage() {
                             .decodeToString()
                             .let {
                                 Json.decodeFromString(
-                                    xyz.malefic.irc.auth.model.auth.CreateAccountResponse
+                                    CreateAccountResponse
                                         .serializer(),
                                     it,
                                 )
@@ -97,7 +107,7 @@ fun CreateAccountPage() {
                 onCommit = ::tryCreate,
             )
 
-            _root_ide_package_.xyz.malefic.irc.core.components.widgets.TextButton(
+            TextButton(
                 "Create Account",
                 enabled = isValid(),
                 onClick = ::tryCreate,
@@ -106,8 +116,7 @@ fun CreateAccountPage() {
             if (errorText.isNotBlank()) {
                 SpanText(
                     errorText,
-                    _root_ide_package_.xyz.malefic.irc.core.styles.ErrorTextStyle
-                        .toModifier(),
+                    ErrorTextStyle.toModifier(),
                 )
             }
         }

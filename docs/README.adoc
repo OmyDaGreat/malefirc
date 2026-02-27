@@ -34,6 +34,9 @@ Compatible with irssi, HexChat, WeeChat, and any RFC 1459/2812 client.
 | xref:usage-client.adoc[Client Messaging Guide]
 | Channel messages, direct messages, `@mention` notifications, and threaded replies (IRCv3 `message-tags`).
 
+| xref:websocket.adoc[WebSocket Bridge]
+| Real-time web client access via a WebSocket-to-IRC relay on port 6680.
+
 | xref:testing.adoc[Testing]
 | Manual testing procedures for the server, client, and protocol compliance.
 |===
@@ -54,6 +57,10 @@ Compatible with irssi, HexChat, WeeChat, and any RFC 1459/2812 client.
 | 6697
 | Implicit TLS — requires `IRC_TLS_ENABLED=true`
 
+| WebSocket Bridge
+| 6680
+| `ws://<host>:6680/irc` — web client IRC access
+
 | Web Client
 | 8080
 | Kobweb interface via browser
@@ -72,6 +79,22 @@ Compatible with irssi, HexChat, WeeChat, and any RFC 1459/2812 client.
 | `IRC_PORT`
 | `6667`
 | IRC server listen port
+
+| `IRC_WS_ENABLED`
+| `true`
+| Set to `false` to disable the WebSocket bridge
+
+| `IRC_WS_PORT`
+| `6680`
+| WebSocket bridge listen port
+
+| `IRC_WS_HOST`
+| `0.0.0.0`
+| Network interface the WebSocket bridge binds to
+
+| `IRC_HOST`
+| `127.0.0.1`
+| IRC server host the bridge connects to internally
 
 | `IRC_SERVER_NAME`
 | `malefirc.local`

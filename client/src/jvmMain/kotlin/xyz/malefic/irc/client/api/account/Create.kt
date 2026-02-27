@@ -1,4 +1,4 @@
-package xyz.malefic.irc.auth.api.account
+package xyz.malefic.irc.client.api.account
 
 import com.varabyte.kobweb.api.Api
 import com.varabyte.kobweb.api.ApiContext

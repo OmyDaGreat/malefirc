@@ -8,6 +8,12 @@ import xyz.malefic.irc.core.components.layouts.PageLayout
 import xyz.malefic.irc.core.components.sections.CenteredColumnContent
 import xyz.malefic.irc.core.components.widgets.TextButton
 
+/**
+ * Landing page for the Malefirc web client.
+ *
+ * If the user is already logged in, shows a "Go to Chat" shortcut.  Always shows
+ * "Create Account" and "Login" buttons for unauthenticated visitors.
+ */
 @Page
 @Composable
 fun HomePage() =

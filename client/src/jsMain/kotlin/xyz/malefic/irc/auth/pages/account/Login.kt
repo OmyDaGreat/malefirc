@@ -12,6 +12,7 @@ import kotlinx.browser.window
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import xyz.malefic.irc.auth.model.auth.Account
+import xyz.malefic.irc.auth.model.auth.LoginResponse
 import xyz.malefic.irc.auth.model.auth.LoginState
 import xyz.malefic.irc.core.components.layouts.PageLayout
 import xyz.malefic.irc.core.components.sections.CenteredColumnContent
@@ -19,6 +20,13 @@ import xyz.malefic.irc.core.components.widgets.TextButton
 import xyz.malefic.irc.core.components.widgets.TitledTextInput
 import xyz.malefic.irc.core.styles.ErrorTextStyle
 
+/**
+ * Login page for existing Malefirc accounts.
+ *
+ * Validates that username and password contain no whitespace, then POSTs to
+ * `/api/account/login`.  On success, sets [LoginState.current] to [LoginState.LoggedIn]
+ * and navigates to `/chat`.
+ */
 @Page
 @Composable
 fun LoginPage() {
@@ -55,7 +63,7 @@ fun LoginPage() {
                             .decodeToString()
                             .let {
                                 Json.decodeFromString(
-                                    xyz.malefic.irc.auth.model.auth.LoginResponse
+                                    LoginResponse
                                         .serializer(),
                                     it,
                                 )

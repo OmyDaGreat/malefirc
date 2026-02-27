@@ -5,6 +5,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import xyz.malefic.irc.auth.AuthenticationService
 import xyz.malefic.irc.protocol.IRCCommand
 import xyz.malefic.irc.protocol.IRCMessage
 import xyz.malefic.irc.protocol.IRCMessageBuilder
@@ -26,6 +27,10 @@ import javax.net.ssl.SSLSocket
  * - Plain TCP on [port] (default 6667).
  * - Dedicated TLS on [tlsPort] (default 6697) when [tlsEnabled] is `true`.
  *
+ * A WebSocket bridge ([xyz.malefic.irc.server.websocket.WebSocketBridge]) is started separately
+ * by [main] on `IRC_WS_PORT` (default 6680) and relays WebSocket clients to this server over a
+ * local plain TCP connection — no changes are needed in this class to support web clients.
+ *
  * ## Configuration via environment variables
  * | Variable | Default | Description |
  * |---|---|---|
@@ -42,6 +47,7 @@ import javax.net.ssl.SSLSocket
  * @param tlsPort Port for the dedicated TLS listener.
  *
  * @see TLSConfig for TLS keystore configuration
+ * @see xyz.malefic.irc.server.websocket.WebSocketBridge for WebSocket bridge configuration
  * @see IRCUser for user state
  * @see IRCChannel for channel state
  */
@@ -511,7 +517,7 @@ class IRCServer(
                         val passwd = parts[2] // Password
 
                         // Authenticate using our service
-                        if (xyz.malefic.irc.server.auth.AuthenticationService
+                        if (AuthenticationService
                                 .authenticate(authcid, passwd)
                         ) {
                             user.authenticated = true
@@ -697,7 +703,7 @@ class IRCServer(
             val username = user.username ?: user.nickname
             if (username != null) {
                 try {
-                    if (xyz.malefic.irc.server.auth.AuthenticationService
+                    if (AuthenticationService
                             .authenticate(username, user.password!!)
                     ) {
                         user.authenticated = true

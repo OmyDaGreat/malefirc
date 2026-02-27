@@ -30,6 +30,7 @@ import org.jetbrains.compose.web.css.percent
 import org.jetbrains.compose.web.css.px
 import org.jetbrains.compose.web.dom.Text
 
+/** Silk CSS style for the navigation bar background — inverts the page colour palette. */
 val NavHeaderStyle =
     CssStyle.base(extraModifier = { SmoothColorStyle.toModifier() }) {
         Modifier
@@ -40,6 +41,7 @@ val NavHeaderStyle =
             .backgroundColor(colorMode.toPalette().color)
     }
 
+/** Silk CSS style for the centred application title text in the nav bar. */
 val TitleStyle =
     CssStyle.base {
         Modifier
@@ -49,6 +51,7 @@ val TitleStyle =
             .color(colorMode.toPalette().background)
     }
 
+/** Silk CSS style for circular icon buttons in the navigation bar. */
 val NavButtonStyle =
     CssStyle.base {
         Modifier
@@ -58,6 +61,12 @@ val NavButtonStyle =
             .borderRadius(50.percent)
     }
 
+/**
+ * A circular icon button used inside the [NavHeader].
+ *
+ * @param onClick Action invoked when the button is pressed.
+ * @param content Icon composable rendered inside the button.
+ */
 @Composable
 private fun NavButton(
     onClick: () -> Unit,
@@ -66,6 +75,12 @@ private fun NavButton(
     Button(onClick = { onClick() }, NavButtonStyle.toModifier(), content = { content() })
 }
 
+/**
+ * Abstract descriptor for an action button that can be injected into the [NavHeader].
+ *
+ * Implement [render] to provide the button icon and [onActionClicked] to handle the press.
+ * Set [ExtraNavHeaderAction.current] to show an instance or `null` to hide it.
+ */
 abstract class NavHeaderAction {
     @Composable
     abstract fun render()
@@ -73,6 +88,14 @@ abstract class NavHeaderAction {
     abstract fun onActionClicked(router: Router)
 }
 
+/**
+ * Singleton holder for an optional extra action button in the [NavHeader].
+ *
+ * Set [current] to a [NavHeaderAction] instance to display an additional icon button
+ * (e.g., a logout button when the user is logged in).  Set it to `null` to remove it.
+ *
+ * @see LoginState for how this is used to inject a logout action.
+ */
 object ExtraNavHeaderAction {
     private val mutableActionState by lazy { mutableStateOf<NavHeaderAction?>(null) }
 
@@ -83,6 +106,15 @@ object ExtraNavHeaderAction {
         }
 }
 
+/**
+ * Application navigation bar composable.
+ *
+ * Renders a fixed-height bar containing:
+ * - Home and About navigation buttons (left side)
+ * - An optional extra action from [ExtraNavHeaderAction] (e.g., logout)
+ * - A light/dark colour-mode toggle button
+ * - The application title centred over the bar
+ */
 @Composable
 fun NavHeader() {
     val ctx = rememberPageContext()
@@ -112,7 +144,7 @@ fun NavHeader() {
         }
 
         Box(TitleStyle.toModifier().align(Alignment.Center)) {
-            Text("Kobweb Chat \uD83D\uDCAC")
+            Text("Malefirc \uD83D\uDCAC")
         }
     }
 }

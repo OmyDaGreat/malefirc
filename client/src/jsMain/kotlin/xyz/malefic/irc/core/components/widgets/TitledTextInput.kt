@@ -18,6 +18,7 @@ import org.jetbrains.compose.web.css.px
 import org.w3c.dom.HTMLInputElement
 import xyz.malefic.irc.core.G
 
+/** Silk CSS style for the grey label text above each [TitledTextInput]. */
 val TitledTextInputLabelStyle =
     CssStyle.base {
         Modifier
@@ -25,6 +26,7 @@ val TitledTextInputLabelStyle =
             .color(Colors.Grey)
     }
 
+/** Silk CSS style for the [TitledTextInput] wrapper column — sets width and bottom margin. */
 val TitledTextInputStyle =
     CssStyle.base {
         Modifier
@@ -32,7 +34,16 @@ val TitledTextInputStyle =
             .margin(bottom = 10.px)
     }
 
-/** A text input box with a descriptive label above it. */
+/**
+ * A text input field with a descriptive label rendered above it.
+ *
+ * @param title Label text shown above the input.
+ * @param text Current value of the input.
+ * @param onTextChange Callback invoked whenever the input value changes.
+ * @param masked If `true`, renders the input as a password field.
+ * @param onCommit Callback invoked when the user presses Enter.
+ * @param ref Optional DOM element reference for focus management.
+ */
 @Composable
 fun TitledTextInput(
     title: String,

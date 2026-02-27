@@ -11,6 +11,13 @@ import kotlinx.browser.document
 import org.jetbrains.compose.web.css.px
 import xyz.malefic.irc.core.components.sections.NavHeader
 
+/**
+ * Standard page scaffold that sets the browser tab [title], renders the [NavHeader],
+ * and centres [content] in a padded column.
+ *
+ * @param title Browser tab title to set via `document.title`.
+ * @param content Page-specific composable content rendered below the header.
+ */
 @Composable
 fun PageLayout(
     title: String,

@@ -1,7 +1,6 @@
 package xyz.malefic.irc.auth.util
 
 import org.mindrot.jbcrypt.BCrypt
-import xyz.malefic.irc.server.auth.AuthenticationService
 
 /**
  * Utility object for BCrypt password hashing and verification.

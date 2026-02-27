@@ -264,3 +264,193 @@ Enable message-tags in WeeChat (3.4+):
 . Go to *Network List → Add → Edit*.
 . Set server to `yourdomain.com/6697+` (the `+` enables TLS).
 . Under *Login Method*, select *SASL* if using account authentication.
+
+== Protocol Signal Flow
+
+This section traces the exact IRC wire messages exchanged between multiple clients and the
+server for the most common scenarios.  Use this as a reference when building bots, debugging
+client behaviour, or understanding how the server routes traffic.
+
+=== Notation
+
+----
+C1 → S   Message sent by Client 1 to the server
+C2 → S   Message sent by Client 2 to the server
+S  → C1  Message sent by the server to Client 1
+S  → C2  Message sent by the server to Client 2
+S  → all Broadcast to every client in the channel
+----
+
+=== 1 — Connection and Registration
+
+Both plain TCP (port 6667) and implicit TLS (port 6697) follow the same protocol after the
+socket is established.  The WebSocket bridge (port 6680) proxies an identical sequence over
+`ws://<host>:6680/irc`.
+
+.Plain registration (no authentication)
+----
+C1 → S   NICK alice
+C1 → S   USER alice 0 * :Alice Example
+
+S  → C1  :malefirc.local 001 alice :Welcome to the IRC Network alice!alice@host
+S  → C1  :malefirc.local 002 alice :Your host is malefirc.local, running version 1.0
+S  → C1  :malefirc.local 003 alice :This server was created today
+S  → C1  :malefirc.local 004 alice malefirc.local 1.0 iow mnopqrstv
+S  → C1  :malefirc.local 005 alice CHANTYPES=# PREFIX=(ov)@+ CHANMODES=b,k,l,mn :are supported
+S  → C1  :malefirc.local 375 alice :- malefirc.local Message of the Day -
+S  → C1  :malefirc.local 376 alice :End of /MOTD command.
+----
+
+.PASS command (pre-registration authentication)
+----
+C1 → S   PASS mypassword
+C1 → S   NICK alice
+C1 → S   USER alice 0 * :Alice Example
+# server attempts to authenticate "alice" with "mypassword" during registration
+----
+
+.SASL PLAIN authentication
+----
+C1 → S   CAP REQ :sasl message-tags
+S  → C1  :malefirc.local CAP * ACK :sasl message-tags
+C1 → S   AUTHENTICATE PLAIN
+S  → C1  AUTHENTICATE +
+C1 → S   AUTHENTICATE <base64("\0alice\0password")>
+S  → C1  :malefirc.local 900 alice alice :You are now logged in as alice
+S  → C1  :malefirc.local 903 alice :SASL authentication successful
+C1 → S   CAP END
+C1 → S   NICK alice
+C1 → S   USER alice 0 * :Alice Example
+# 001-005 welcome sequence follows
+----
+
+=== 2 — Channel Join and Part
+
+.C1 and C2 both join #general (C1 first)
+----
+C1 → S   JOIN #general
+
+# Server sends JOIN confirmation + channel state to C1
+S  → C1  :alice!alice@host JOIN #general
+S  → C1  :malefirc.local 332 alice #general :Welcome to general chat
+S  → C1  :malefirc.local 353 alice = #general :@alice
+S  → C1  :malefirc.local 366 alice #general :End of /NAMES list.
+
+# C2 joins later
+C2 → S   JOIN #general
+S  → C2  :bob!bob@host JOIN #general
+S  → C2  :malefirc.local 353 bob = #general :@alice bob
+S  → C2  :malefirc.local 366 bob #general :End of /NAMES list.
+# C1 also receives the JOIN notification for C2
+S  → C1  :bob!bob@host JOIN #general
+
+# C2 parts
+C2 → S   PART #general :Goodbye
+S  → all :bob!bob@host PART #general :Goodbye
+----
+
+=== 3 — Channel Message Flow
+
+.C1 sends a message; all channel members receive it
+----
+C1 → S   PRIVMSG #general :Hello everyone!
+
+# Server persists the message to DB (assigns msgid=42)
+# Then broadcasts to all channel members EXCEPT C1
+S  → C2  @msgid=42 :alice!alice@host PRIVMSG #general :Hello everyone!
+S  → C3  @msgid=42 :alice!alice@host PRIVMSG #general :Hello everyone!
+# (legacy clients without message-tags see the message without the @msgid tag)
+----
+
+.C1 mentions C2 with @bob
+----
+C1 → S   PRIVMSG #general :@bob can you review that PR?
+
+# Broadcast to all channel members (msgid=43 assigned)
+S  → C2  @msgid=43 :alice!alice@host PRIVMSG #general :@bob can you review that PR?
+S  → C3  @msgid=43 :alice!alice@host PRIVMSG #general :@bob can you review that PR?
+
+# Server additionally sends a direct NOTICE to the mentioned user
+S  → C2  :malefirc.local NOTICE bob :You were mentioned in #general by alice: @bob can you review that PR?
+----
+
+=== 4 — Direct Messages (DMs)
+
+.C1 sends a DM to C2 (C2 need not be in any shared channel)
+----
+C1 → S   PRIVMSG bob :Hey, are you around?
+
+S  → C2  @msgid=44 :alice!alice@host PRIVMSG bob :Hey, are you around?
+# C1 receives no echo (the sender does not get a copy)
+----
+
+=== 5 — Threaded Reply Flow
+
+.C2 replies to msgid=42 using the +reply tag
+----
+# C2 stores msgid=42 from the earlier message, then:
+C2 → S   @+reply=42 PRIVMSG #general :Hello Alice!
+
+# Server persists reply relationship (replyToId=42), assigns msgid=45
+# Broadcasts with both tags
+S  → C1  @msgid=45;+reply=42 :bob!bob@host PRIVMSG #general :Hello Alice!
+S  → C3  @msgid=45;+reply=42 :bob!bob@host PRIVMSG #general :Hello Alice!
+# Legacy clients (no message-tags CAP) receive:
+S  → C4  :bob!bob@host PRIVMSG #general :Hello Alice!
+----
+
+=== 6 — Keep-Alive (PING/PONG)
+
+The server sends a `PING` periodically to every connected client.  Clients that do not
+respond within the timeout are disconnected.
+
+----
+S  → C1  PING :malefirc.local
+C1 → S   PONG :malefirc.local
+----
+
+WebSocket clients **must** implement this exchange.  See xref:websocket.adoc[WebSocket Bridge]
+for a browser client example.
+
+=== 7 — WebSocket Bridge Flow
+
+A browser client connecting through the WebSocket bridge (port 6680) sends and receives
+identical IRC wire messages.  The bridge opens a dedicated TCP connection to the IRC server
+for each WebSocket session.
+
+----
+Browser WebSocket          Bridge (6680)          IRC Server (6667)
+      |                        |                         |
+      |-- WS OPEN ------------>|-- TCP CONNECT --------->|
+      |                        |                         |
+      |-- "NICK WebUser" ----->|-- NICK WebUser\r\n ---->|
+      |-- "USER ..." -------->|-- USER ...\r\n -------->|
+      |                        |                         |
+      |<-- "001 WebUser ..." --|<-- 001 WebUser ...\r\n -|
+      |                        |                         |
+      |-- "JOIN #general" ---->|-- JOIN #general\r\n --->|
+      |                        |                         |
+      |<-- "353 ..." ----------|<-- 353 ...\r\n ---------|
+      |                        |                         |
+      |-- "PRIVMSG #general :Hi" ->|-- PRIVMSG ...\r\n ->|
+      |<-- "@msgid=N :..." ----|<-- @msgid=N :...\r\n ---|
+      |                        |                         |
+      |-- WS CLOSE ----------->|-- TCP CLOSE ----------->|
+----
+
+Each WebSocket text frame is one IRC line without `\r\n`; the bridge appends `\r\n` before
+forwarding to the IRC server and strips it before forwarding to the browser.
+
+=== 8 — Quit and Disconnect
+
+----
+C1 → S   QUIT :Leaving
+
+# Server broadcasts to all channels C1 was in, then closes the connection
+S  → C2  :alice!alice@host QUIT :Leaving
+S  → C3  :alice!alice@host QUIT :Leaving
+# C1's TCP connection is closed by the server
+----
+
+If the connection drops without a `QUIT` (e.g. network failure), the server detects the
+broken socket and broadcasts the quit with reason `"Client quit"` to clean up channel state.

@@ -1,0 +1,201 @@
+= WebSocket Bridge
+:toc: left
+:toc-title: Contents
+:icons: font
+:source-highlighter: rouge
+
+xref:README.adoc[← Back to Index]
+
+The WebSocket bridge lets web-based IRC clients connect to Malefirc without a native TCP
+connection.  It runs as an embedded Ktor HTTP server inside the IRC server process and exposes
+a single WebSocket endpoint that transparently relays raw IRC protocol messages to the local
+IRC server over a plain TCP connection.
+
+== Overview
+
+Each WebSocket connection that arrives on `ws://<host>:6680/irc` opens a dedicated TCP
+connection to the IRC server (default `127.0.0.1:6667`).  The bridge then relays frames in
+both directions:
+
+----
+Web client  ←──── WebSocket (text frames) ────►  Bridge  ←──── TCP (IRC lines) ────►  IRC Server
+----
+
+Because the bridge uses the standard IRC wire protocol internally, the IRC server treats
+WebSocket clients exactly like any other client — no special-casing is required.
+
+== Quick Start
+
+The bridge is **enabled by default**.  Start the server normally and connect from JavaScript:
+
+[source,bash]
+----
+./gradlew :server:run
+----
+
+[source,javascript]
+----
+const ws = new WebSocket("ws://localhost:6680/irc");
+
+ws.onopen = () => {
+  ws.send("NICK WebUser");
+  ws.send("USER webuser 0 * :Web IRC User");
+};
+
+ws.onmessage = ({ data }) => console.log("IRC ←", data);
+----
+
+== Configuration
+
+All settings are controlled by environment variables.
+
+[cols="2,1,3", options="header"]
+|===
+| Variable | Default | Description
+| `IRC_WS_ENABLED` | `true` | Set to `false` to disable the WebSocket bridge entirely
+| `IRC_WS_PORT` | `6680` | Port the WebSocket server listens on
+| `IRC_WS_HOST` | `0.0.0.0` | Network interface the WebSocket server binds to
+| `IRC_HOST` | `127.0.0.1` | IRC server host the bridge connects to
+| `IRC_PORT` | `6667` | IRC server port the bridge connects to
+|===
+
+== Protocol
+
+The bridge uses *raw IRC protocol over WebSocket text frames*.
+
+=== Frame format
+
+* **Client → server**: One complete IRC command per frame, **without** the trailing `\r\n`.
+  The bridge appends `\r\n` automatically before forwarding to the IRC server.
+* **Server → client**: One IRC line per frame, with the trailing `\r\n` **stripped**.
+
+=== Session lifecycle
+
+. Open `ws://<host>:<IRC_WS_PORT>/irc`.
+. Send `NICK` and `USER` commands to register.
+. Optionally authenticate via `PASS` or SASL (`CAP REQ :sasl` → `AUTHENTICATE PLAIN`).
+. Send IRC commands; receive server responses as text frames.
+. Close the WebSocket to disconnect (the bridge closes the underlying TCP connection).
+
+== Client Examples
+
+=== Minimal browser client
+
+[source,html]
+----
+<!doctype html>
+<html>
+<body>
+<script>
+const ws = new WebSocket("ws://localhost:6680/irc");
+const log = (line) => console.log(line);
+
+ws.onopen = () => {
+  ws.send("NICK MyWebNick");
+  ws.send("USER mywebuser 0 * :Browser IRC User");
+};
+
+ws.onmessage = ({ data }) => {
+  log(data);
+  // Auto-reply to PING so the connection stays alive
+  if (data.startsWith("PING ")) {
+    ws.send("PONG " + data.slice(5));
+  }
+};
+
+ws.onerror = (e) => log("Error: " + e);
+ws.onclose = () => log("Disconnected");
+
+// Join a channel after a short delay to allow registration
+setTimeout(() => ws.send("JOIN #general"), 1000);
+</script>
+</body>
+</html>
+----
+
+=== Node.js client (ws library)
+
+[source,javascript]
+----
+const WebSocket = require("ws");
+const ws = new WebSocket("ws://localhost:6680/irc");
+
+ws.on("open", () => {
+  ws.send("NICK NodeBot");
+  ws.send("USER nodebot 0 * :Node.js IRC Bot");
+  setTimeout(() => ws.send("JOIN #bots"), 1000);
+});
+
+ws.on("message", (data) => {
+  const line = data.toString();
+  console.log("←", line);
+  if (line.startsWith("PING ")) ws.send("PONG " + line.slice(5));
+});
+----
+
+=== With SASL authentication
+
+[source,javascript]
+----
+const ws = new WebSocket("ws://localhost:6680/irc");
+
+ws.onopen = () => {
+  ws.send("CAP REQ :sasl message-tags");
+};
+
+ws.onmessage = ({ data }) => {
+  if (data.includes("CAP * ACK :sasl")) {
+    ws.send("AUTHENTICATE PLAIN");
+  } else if (data.startsWith("AUTHENTICATE +")) {
+    // Base64("\0username\0password")
+    const creds = btoa("\0myuser\0mypassword");
+    ws.send("AUTHENTICATE " + creds);
+  } else if (data.includes("903 ")) {
+    // RPL_SASLSUCCESS — complete registration
+    ws.send("CAP END");
+    ws.send("NICK myuser");
+    ws.send("USER myuser 0 * :Authenticated Web User");
+  }
+};
+----
+
+== Docker
+
+The bridge port is exposed automatically in the provided `docker-compose.yml`.
+
+[source,yaml]
+----
+irc-server:
+  ports:
+    - "6667:6667"   # Plain IRC
+    - "6680:6680"   # WebSocket bridge
+    - "6697:6697"   # IRC over TLS
+  environment:
+    - IRC_WS_ENABLED=true
+    - IRC_WS_PORT=6680
+----
+
+Connect from the browser using the host machine's address:
+
+[source,javascript]
+----
+const ws = new WebSocket("ws://localhost:6680/irc");
+----
+
+== Troubleshooting
+
+=== Bridge fails to start
+Check that `IRC_WS_PORT` is not already in use.  You will see the following in the server log
+when the bridge starts successfully:
+
+----
+WebSocket bridge started on port 6680 (ws://0.0.0.0:6680/irc)
+----
+
+=== WebSocket connects but IRC commands are ignored
+Ensure each frame contains exactly one IRC command.  Do not concatenate multiple commands into
+a single frame.
+
+=== `PING`/`PONG` disconnections
+The IRC server sends a `PING` periodically.  Your WebSocket client **must** reply with
+`PONG <token>` to keep the connection alive.  See the browser client example above.

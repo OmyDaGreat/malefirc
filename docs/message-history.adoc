@@ -105,96 +105,38 @@ val cutoff = System.currentTimeMillis() - (30 * 24 * 60 * 60 * 1000L)
 val deleted = MessageHistoryService.cleanupOldMessages(cutoff)
 ----
 
-== REST API
+== Access Control
 
-`MessageHistoryAPI` wraps the service and adds authentication checks.
-All methods require the `requestingUser` parameter.
+All history queries are performed via `MessageHistoryService`.  Callers are responsible
+for enforcing the following access-control rules before returning data to a requesting user:
 
 [#_access_control_rules]
-=== Access Control Rules
+=== Rules
 
-. All methods require a non-null `requestingUser` — unauthenticated calls return an error response.
-. Private message history is restricted to the two participants.
-. `getMessagesBySender` only allows users to retrieve their own messages.
-. Results are filtered to exclude messages from users who have disabled `allow_history_access`.
+. Only authenticated users should be permitted to query history.
+. Private message history (`getPrivateHistory`) must be restricted to the two participants.
+. `getMessagesBySender` should only allow users to retrieve their own sent messages.
+. Results must be filtered to exclude messages from users who have disabled `allow_history_access`
+  (see xref:security.adoc#_user_privacy_settings[Privacy Settings]).
 
-=== Example Calls
+These rules are checked against the `AccountTable.allowHistoryAccess` column.
+
+=== Data Shape
+
+`MessageHistoryService` returns `MessageHistoryData` objects:
 
 [source,kotlin]
 ----
-// Channel history
-val json = MessageHistoryAPI.getChannelHistory(
-    requestingUser = currentUser,
-    channelName = "#general",
-    limit = 50,
-    before = System.currentTimeMillis()
+data class MessageHistoryData(
+    val id: Long,
+    val timestamp: Long,       // Unix ms
+    val sender: String,        // IRC nickname
+    val target: String,        // #channel or recipient nick
+    val message: String,
+    val messageType: String,   // "PRIVMSG" or "NOTICE"
+    val isChannelMessage: Boolean,
+    val replyToId: Long?,      // parent message ID for threaded replies
 )
-
-// Private messages (participants only)
-val json = MessageHistoryAPI.getPrivateHistory(
-    requestingUser = currentUser,   // must be user1 or user2
-    user1 = currentUser,
-    user2 = "otherUser",
-    limit = 100
-)
-
-// Search (privacy-filtered)
-val json = MessageHistoryAPI.searchMessages(
-    requestingUser = currentUser,
-    query = "important topic",
-    target = "#general",            // optional
-    limit = 50
-)
-
-// Own messages only
-val json = MessageHistoryAPI.getMessagesBySender(
-    requestingUser = currentUser,
-    sender = currentUser,           // must match requestingUser
-    limit = 100
-)
-
-// Message count
-val json = MessageHistoryAPI.getMessageCount(
-    requestingUser = currentUser,
-    target = "#general"
-)
-----
-
-=== Response Shape
-
-[source,json]
-----
-{
-  "success": true,
-  "messages": [
-    {
-      "id": 1,
-      "timestamp": 1707865200000,
-      "sender": "alice",
-      "target": "#general",
-      "message": "Hello everyone!",
-      "messageType": "PRIVMSG",
-      "isChannelMessage": true
-    }
-  ]
-}
-----
-
-Error responses:
-
-[source,json]
-----
-{"success": false, "messages": [], "error": "Authentication required"}
-----
-
-[source,json]
-----
-{"success": false, "messages": [], "error": "Access denied"}
-----
-
-[source,json]
-----
-{"success": false, "messages": [], "error": "History access disabled by user"}
 ----
 
 == Privacy Controls

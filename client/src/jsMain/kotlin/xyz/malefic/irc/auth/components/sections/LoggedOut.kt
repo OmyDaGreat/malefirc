@@ -7,6 +7,11 @@ import org.jetbrains.compose.web.dom.Text
 import xyz.malefic.irc.core.components.sections.CenteredColumnContent
 import xyz.malefic.irc.core.components.widgets.TextButton
 
+/**
+ * Shown on pages that require authentication when the user is not logged in.
+ *
+ * Displays an explanatory message and a "Go Home" button that navigates back to `/`.
+ */
 @Composable
 fun LoggedOutMessage() {
     CenteredColumnContent {

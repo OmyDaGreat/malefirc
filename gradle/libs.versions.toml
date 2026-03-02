@@ -8,7 +8,7 @@ postgres = "42.7.10"
 ktor = "3.4.0"
 kotlinx-coroutines = "1.10.2"
 jbcrypt = "0.4"
-kermit = "2.0.8"
+kermit = "2.1.0"
 
 [libraries]
 compose-html-core = { module = "org.jetbrains.compose.html:html-core", version.ref = "jetbrains-compose" }
